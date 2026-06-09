@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>紙箱接單系統</title>
+<link rel="manifest" href="data:application/json,{
+  "name": "紙箱接單系統",
+  "short_name": "接單",
+  "description": "紙箱工廠接單與派工管理",
+  "start_url": "./order-scanner.html",
+  "display": "standalone",
+  "background_color": "#1a1714",
+  "theme_color": "#c0392b",
+  "orientation": "portrait",
+  "icons": [
+    {"src": "cat-icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "cat-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="接單">
+<meta name="theme-color" content="#c0392b">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYAAABS3GwHAAAKdElEQVR4nO2cP24dNxDGKcOVqwTYQIDKVI7qAGmUXCAqdAddwUDOEMBX8B0EWDlBXhMgteMqpQAhC8RVWqVQ6FCr5T4uOcP5w+/XJZaeyJnv4wy53HcSAAtnp9MD5efd3c8nlJ8HHkFQG6AWeS0wRz0IXCFaxF4KTFEGgpTBmuCPAUOsg6AkeBN9Dpjhf4YPxCiizzG6GYac/OiizzGiGYaaMIRfxkhGGGKiEH4dIxjB7QQhelq8msHdpCB8XrwZ4YX0ACiB+PnxFmMXbvaWFCt4qAamJwDh68CyEUwOHMLXiUUjmNsDQPx6sZgbM461GNyRsVINTFQAiN8eVnKm3gBWAgmeYyF3agzw6fbqSbDOTqcHCwEE26zlcZlrSV5KDyAlBub8+iA9FEDM2en08OHdhfQwnqGmAnxxefN506QxUKCNNKdprqVRUwGWZTIGDNXANmuL2dnp9KDllEhFBdjq9VEN7LKVOy37O3EX5lb+yHwzhelqDiGgGlgh5jDNXWSZQ+lKIFoBSleB+WYKIaAaWCAVfwnSlUDMAKUTjytIagIYQR9pXmKulqt/DkkTiBhga8Jbbc58M6EaKCQV/tbKv5VbKRN0PwWimGjsLXFSJEu6CJW2PFtInA51rQCl4i8RdBpwVIP+7BV/6SLVuxJ0M0DLxHK95NIEMAI/yzjnxF/a/6/R0wRdDMA5oWUCYAI+1o6ouehlAvZ+q2Uie8vssTNnUEeN8NNctOSBe0/AWgEoXVxSUlEN6GkVfyvclYDtFEjqWGv59FH6pKjVhJrGzdnybMF5OsRWXqgMUHvUtrYKcYqpd7XpPZfa2FON05QBKFf/lo1XrhRTJEVbe8U5p5aYUxqVwwTkLZD03Y6UtctYITwmuiYx2kSfko6Ncm5Sbc8aHK0Q6YdxiZ/iiWNtNdAs+hJq50cRZ642jdIEKt4H6EEuoTkBeHmwtjUPC6s+N2RO4mx9KB/AbB3RnV8fXIh+i2NzpIwt50adqgqQfEiPvp/y4hXlObUnKOPa4/iWwgTNLZCmTW8pI5X4UizGhEJ7JvcAFCv4sbvro0AVB6tVtckAPVd/rpI6sgm45t7z6XWrBqsNYLH1yTGiCTzNuUWL1ZsIKQNgM0yPtc3vGrUb4qonwZZXf4j+OWlMrFaG2qfEar4ZjhOIvhwPZtjD7j2A9Oq/p8ROVzPE38De+Em/gFSjTZPHoJG15ExXc/jh/Q2ET8hWTK3HeVcLJL3653jy1Ynv7V9g00h6g3bvt7/1ZO9eoPgHtYk/d/0X4uclF2vp9mdJqQlMt0Dn1weIvzNL0WsT/l6KXKJt9V8D4u+LBeGXVAHTFSAC8ffHS8xdGACAWo4aQHv742Ulsoj22Jdo13QF0J6AEbCeg00DaF/9ATjGMQ2brQDWVx5PWM5F1gBY/YEXtrRssgJYXnG8YjUnQ1yH3sPlm/UHPLdvbSXYyzy4WX1Sprn94VhpcmLJoVVEGuah+Qnx2pNhky0QJXtFU/s73HiZR2+GNkCLADSJx8s8JHhWEkZpf0oS/+sff/2W/vf333z13fJnpNshjfOw1AYNWQFqRJP7f5IrqJd5SDKcAWpFs/VvEuLxMg9pnhhAc/sDAAVLjZupAFYftIyIpVyZMQAFnCW+Z/vgZR4aGMoApaydkpT8mza8zIOTzwZA//+UNYFYFI2XeVCSah13gTbwIhQv8+AALRAYGhgADM1QBuC8ttDzSoSXeWjgRQjYAIPxiJofqgIAsGQ4A3CUeIm2wcs8pBnOACHQJlpSNF7mIYkZA1DfMadIuAbRaJyH5vcBlpgxAActidcg/oiXeUgwtAFCqBOARtF4mUdvTiwdgfa4Zuvl60Qk52GpBTJlgBBs3TUfEUviDwEtEBgcGACQYq1CmzKAteCOiqU8mTGApaACO/kyYQArwaxhvnktPQQ2LOTNhAG8EsXv2QTaUW8AC6tIDUvRezWB9vypMcDXX4ZfpMfQi5zYvZpgiaZcq3kQRhGU27cXP1KMhYtSgU9XH5lH0sblm0Nzrv78O6jIlSsDtMJpoL2rO6cJKATcCgxQwJ7+UUNScwaqbW1yJtA81xxar0i4+V6g1tWbS1Qtff1885qtEmhvF3uh1gC9Tw+4DAQBP/Lh3YXKKqC2BdJ+fAb2AwNsoGET3EqvVVnDHqAVLZtgtS2QRS7fHIpeONn6CvJjvz/a15dzo+ZBmBeOCRQC1oWaFmiJpT3AmqjXVvLcz5X8funf0IzGPcDLu/tZrQks07rSo1Lwc3c/n6AFIqB2JY6/h290kAMGIGKvIJc/v+f3IX46cApESBRm7SnPsd+H8OmBARhoFSqE3g+0QGBoYAAwNC9CeDwOkh4IAD2JmkcFAEMDA4ChgQHA0MAAYGg+GwAbYTAKqdZRAcDQwABgaGAAMDRPDIB9APDOUuOoAGBoYAAwNM8MgDYIcCH9nveatvE+AOhKagINL8mjBQJifHh3IV4Vsu2O9DdFSAcGyMBVFXKtPSoAUEXvqgADAJX0MkHWADgNAtJQVYMtLaMCAPVwVoNNA6AKAC3UmuCYhlEBgBk4NshHDYAqALRRaoIS7aICAJNQVQIYAHTj/Pqg4vpDSpEB0AYBSqiMsFUFSjWLCgDEoDBCaytUbABUAcBFqxGWJtij1V0VACYAnFCYYK9G0QIBVfTeJO82AKoA4KbWBDX7AVQAoJJelaDKAKgCoAc1Jvh0e7XrRS5UAKAa7kpQbQBUAdALThM0VQCYAGhkTxuEFgiYgKsKNBsAVQBYhqQCcJhA261B0EbvfJa2QWQtECoB4IbDRMN8NeI/83z0Z15NU4eRyFMSixDGiAepAe7u5xPKb5Q7vz40XXctTfTaz3tL/t5YLH+nJR6a21nyCkBtghpqkp37DOtGoIhF+jmS8fivzSbVFssxqOR+gCrhXJ/XE46xS8WDS1NsQqWsAqVtEGdyrFUCbqGWxoOq/eEyANuDMMoBlwSRO+GWKkGPsZb8De3iD4H5SXCvVqiXOC2YoOcYe/wtbg2xX4WgmoDmkwTwHIp89VhAu9wF4jRB71VZcxWQGNva37Qi/hA6XoZDJRgDS+IPofNtUJjAN9bEH4LAdWiYwCcWxR+C0PsAlCbofT6v+XmAxNheTZNZ8Ycg+EIMKoEPLIs/BOE3wqgm/u1PHyk+5iiaV/9IzzFSxF36Gr34K5FWTGBB/JEeY/Ug/hAUGCAE/SawJP4I55i9iD8ExstwtVBcovv959cUQwkh9GuvuKCMRQjt8dAi/IiqwUSobpK2JN+68Je0GsHTqp+ibkAR6pdqSgTgTfQ5Ss1AGQ+N4g9BsQEi0m+XgTa0Cj+iYhO8hfYAgjwWcqfeACHYCCR4ipWcmRhkCloi3VgRfsREBUixFuCRsJgbcwNOQTXQgUXhR8wOPAVGkMGy8CPmJ5ACI/TBg/Aj5vYAW3hKjFa8xdjVZFJQDWjxJvyIy0ktgRnq8Cr6FPcTTIERyhhB+JFhJpoCI6wzkvAjw014yehmGFH0KUNPfskoZhhd9CkIRAZvZoDo10FQCrFmCAi+DASpAS2mgNjrQeCYoDYHRM7DvwDBMxJzPvg0AAAAAElFTkSuQmCC">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+:root{--bg:#f5f2ed;--surface:#fff;--border:#d6cfc4;--ink:#1a1714;--ink-light:#6b6560;--accent:#c0392b;--accent-light:#fdf0ef;--success:#2e7d32;--success-light:#f0f7f0;--tag-bg:#ece8e2;--warning:#b7770d;--warning-light:#fdf8ef}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+header{background:var(--ink);color:#fff;padding:16px 28px;display:flex;align-items:center;gap:14px;border-bottom:3px solid var(--accent)}
+header .logo{font-size:20px;font-weight:700;letter-spacing:.05em}
+header .sub{font-size:11px;color:#aaa;margin-top:2px}
+header .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11px;padding:3px 10px;border-radius:2px;font-weight:500}
+.nav-tabs{display:flex;background:var(--ink);border-bottom:1px solid #333;padding:0 28px}
+.nav-tab{padding:10px 18px;font-size:13px;color:#aaa;cursor:pointer;border-bottom:2px solid transparent;transition:.15s;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+.nav-tab:hover{color:#fff}
+.nav-tab.active{color:#fff;border-bottom-color:var(--accent)}
+.tab-panel{display:none}.tab-panel.active{display:block}
+.container{max-width:960px;margin:0 auto;padding:24px 20px 60px}
+.upload-zone{border:2px dashed var(--border);border-radius:6px;background:var(--surface);text-align:center;padding:36px 20px;cursor:pointer;transition:.2s;position:relative;margin-bottom:20px}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:var(--accent-light)}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.upload-icon{font-size:32px;margin-bottom:8px}
+.upload-zone h3{font-size:14px;font-weight:500;margin-bottom:4px}
+.upload-zone p{font-size:12px;color:var(--ink-light)}
+.preview-img{max-height:180px;border-radius:4px;border:1px solid var(--border);object-fit:contain;margin-bottom:10px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border:none;border-radius:3px;font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;transition:.15s}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#a93226}.btn-primary:disabled{background:#ccc;cursor:not-allowed}
+.btn-secondary{background:var(--tag-bg);color:var(--ink);border:1px solid var(--border)}.btn-secondary:hover{background:var(--border)}
+.btn-success{background:var(--success);color:#fff}.btn-success:hover{background:#1b5e20}
+.btn-warning{background:var(--warning);color:#fff}.btn-warning:hover{opacity:.85}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+.status-bar{display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:4px;font-size:13px;margin-bottom:14px}
+.status-bar.loading{background:#fff8e1;color:#795548;border:1px solid #ffe082}
+.status-bar.success{background:var(--success-light);color:var(--success);border:1px solid #a5d6a7}
+.status-bar.error{background:var(--accent-light);color:var(--accent);border:1px solid #ef9a9a}
+.status-bar.warning{background:var(--warning-light);color:var(--warning);border:1px solid #f6cc7a}
+.spinner{width:15px;height:15px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.result-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:20px;display:none}
+.result-card.show{display:block}
+.card-header{background:var(--ink);color:#fff;padding:11px 18px;display:flex;align-items:center;justify-content:space-between}
+.card-header h2{font-size:13px;font-weight:500;letter-spacing:.05em}
+.order-no{font-family:'IBM Plex Mono',monospace;font-size:13px;color:#f5c518}
+.fields-grid{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.field{padding:13px 18px;border-bottom:1px solid var(--border);border-right:1px solid var(--border)}
+.field:nth-child(even){border-right:none}
+.field.full{grid-column:1/-1;border-right:none}
+.field label{font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--ink-light);text-transform:uppercase;display:block;margin-bottom:3px}
+.field input,.field textarea,.field select{width:100%;border:1px solid transparent;background:transparent;font-family:inherit;font-size:14px;font-weight:500;color:var(--ink);outline:none;resize:none;padding:2px 4px;margin:-2px -4px;border-radius:3px;transition:.15s}
+.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--accent);background:var(--accent-light)}
+.field select{cursor:pointer}
+.customer-match{background:var(--success-light);border:1px solid #a5d6a7;border-radius:4px;padding:8px 12px;font-size:12px;color:var(--success);margin-bottom:12px;display:none}
+.customer-match.show{display:flex;align-items:center;gap:8px}
+.mark-loaded{background:var(--warning-light);border:1px solid #f6cc7a;border-radius:4px;padding:8px 12px;font-size:12px;color:var(--warning);margin-bottom:12px;display:none}
+.mark-loaded.show{display:flex;align-items:center;gap:8px}
+table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden;font-size:13px}
+th{background:var(--tag-bg);padding:9px 12px;text-align:left;font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--ink-light);text-transform:uppercase;border-bottom:1px solid var(--border)}
+td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--ink)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--accent-light)}
+.tag{display:inline-block;background:var(--tag-bg);color:var(--ink-light);font-size:10px;padding:2px 7px;border-radius:2px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.empty-state{text-align:center;padding:36px;color:var(--ink-light);font-size:13px}
+.history-section{margin-top:28px}
+.history-section h3{font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--ink-light);text-transform:uppercase;margin-bottom:10px}
+/* Customer DB */
+.customer-form{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;margin-bottom:20px}
+.customer-form h3{font-size:14px;font-weight:700;margin-bottom:16px;color:var(--ink)}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group label{font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--ink-light);text-transform:uppercase}
+.form-group input,.form-group textarea,.form-group select{padding:8px 10px;border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:13px;color:var(--ink);background:var(--surface);outline:none;transition:.15s}
+.form-group input:focus,.form-group textarea:focus{border-color:var(--accent)}
+.form-group textarea{resize:vertical;min-height:80px;line-height:1.6;font-size:12px}
+.form-group.full{grid-column:1/-1}
+.mark-preview{background:var(--tag-bg);border-radius:4px;padding:10px 12px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:pre-line;line-height:1.8;min-height:60px;margin-top:4px;color:var(--ink)}
+.var-hint{font-size:10px;color:var(--ink-light);margin-top:3px}
+/* Print */
+@media print{
+  @page{size:A4;margin:12mm 14mm}
+  header,.nav-tabs,.upload-zone,#actionRow,.status-bar,#saveRow,.history-section,.result-card,.customer-match,.mark-loaded,.tab-panel:not(#tab-scan){display:none!important}
+  #tab-scan{display:block!important}
+  #printArea{display:block!important}
+  body{background:#fff}
+}
+#printArea{display:none}
+.po-sheet{width:100%;font-family:'Noto Sans TC',sans-serif;color:#111;font-size:13px}
+.po-top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #111;padding-bottom:10px;margin-bottom:14px}
+.po-title{font-size:24px;font-weight:900;letter-spacing:.1em}
+.po-company{font-size:11px;color:#555;margin-top:3px}
+.po-meta{text-align:right;font-size:12px;line-height:1.8}
+.po-meta .order-id{font-size:18px;font-weight:800;font-family:'IBM Plex Mono',monospace;color:#c0392b}
+.po-grid{display:grid;grid-template-columns:1fr 1fr 1fr;border:1.5px solid #111;border-radius:4px;overflow:hidden;margin-bottom:12px}
+.po-cell{padding:9px 12px;border-right:1px solid #ccc;border-bottom:1px solid #ccc}
+.po-cell:nth-child(3n){border-right:none}
+.po-cell.span2{grid-column:span 2}
+.po-cell.span3{grid-column:span 3;border-right:none}
+.po-cell-label{font-size:9px;font-weight:700;letter-spacing:.12em;color:#777;text-transform:uppercase;margin-bottom:3px}
+.po-cell-value{font-size:15px;font-weight:600;color:#111;line-height:1.3}
+.po-cell-value.big{font-size:18px;font-weight:800}
+.po-cell-value.red{color:#c0392b}
+.po-cell-value.mono{font-family:'IBM Plex Mono',monospace;font-size:13px}
+.po-mark-box{border:1.5px solid #111;border-radius:4px;margin-bottom:12px;overflow:hidden}
+.po-mark-header{background:#111;color:#fff;font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;padding:6px 12px}
+.po-mark-body{display:grid;grid-template-columns:1fr 1fr}
+.po-mark-col{padding:12px 14px;border-right:1px solid #ddd;min-height:80px}
+.po-mark-col:last-child{border-right:none}
+.po-mark-col-title{font-size:9px;font-weight:700;color:#999;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+.po-mark-text{font-size:12px;line-height:1.9;white-space:pre-line;font-weight:500}
+.po-sign{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:16px}
+.po-sign-box{border-top:1.5px solid #111;padding-top:6px;font-size:10px;color:#666;height:50px}
+.po-notes-box{border:1px solid #ccc;border-radius:4px;padding:10px 14px;margin-bottom:12px;min-height:44px}
+.po-notes-label{font-size:9px;font-weight:700;letter-spacing:.12em;color:#777;text-transform:uppercase;margin-bottom:4px}
+.po-notes-text{font-size:12px;line-height:1.7;white-space:pre-line}
+</style>
+</head>
+<body>
+<header>
+  <div><div class="logo">📦 紙箱接單系統</div><div class="sub">整合版 — Google 試算表同步</div></div>
+  <div class="badge">AI 驅動</div> <button id="installBtn" class="badge" style="display:none;cursor:pointer;border:none;background:var(--accent)" onclick="installPWA()">📲 安裝App</button>
+</header>
+<div class="nav-tabs">
+  <button class="nav-tab active" onclick="switchTab('scan')">📄 接單辨識</button>
+  <button class="nav-tab" onclick="switchTab('customers')">👥 客戶資料庫</button>
+  <button class="nav-tab" onclick="switchTab('history')">📋 訂單紀錄</button>
+</div>
+
+<!-- ══ TAB: 接單辨識 ══ -->
+<div class="tab-panel active" id="tab-scan">
+<div class="container">
+  <div class="upload-zone" id="uploadZone">
+    <input type="file" id="fileInput" accept="image/*,application/pdf">
+    <div id="uploadContent">
+      <div class="upload-icon">📄</div>
+      <h3>點擊上傳或拖曳訂單圖片</h3>
+      <p>支援 JPG、PNG、PDF（傳真掃描、拍照皆可）</p>
+    </div>
+  </div>
+  <div id="statusBar" class="status-bar" style="display:none"></div>
+  <div class="btn-row" id="actionRow" style="display:none">
+    <button class="btn btn-primary" id="analyzeBtn">🔍 開始辨識</button>
+    <button class="btn btn-secondary" id="resetBtn">↺ 重新上傳</button>
+  </div>
+
+  <div class="customer-match" id="customerMatch">✓ <span id="customerMatchText"></span></div>
+  <div class="mark-loaded" id="markLoaded">📋 <span id="markLoadedText"></span></div>
+
+  <div class="result-card" id="resultCard">
+    <div class="card-header">
+      <h2>訂單資料</h2>
+      <span class="order-no" id="orderNoDisplay"></span>
+    </div>
+    <div class="fields-grid">
+      <div class="field full">
+        <label>客戶名稱</label>
+        <select id="f_customer_sel" onchange="onCustomerSelect()">
+          <option value="">── 選擇客戶 ──</option>
+        </select>
+      </div>
+      <div class="field"><label>訂單號碼</label><input id="f_order_no" class="mono" placeholder="－"></div>
+      <div class="field"><label>訂貨日期</label><input id="f_order_date" placeholder="－"></div>
+      <div class="field"><label>交貨日期</label><input id="f_delivery_date" placeholder="－"></div>
+      <div class="field"><label>品名 / 型號</label><input id="f_product" placeholder="－"></div>
+      <div class="field"><label>外箱數量</label><input id="f_outer_qty" placeholder="－"></div>
+      <div class="field"><label>外箱尺寸（長×寬×高 台分）</label><input id="f_outer_size" class="mono" placeholder="171×129×73"></div>
+      <div class="field"><label>內箱尺寸（長×寬×高 台分）</label><input id="f_inner_size" class="mono" placeholder="125×54×67"></div>
+      <div class="field"><label>條碼</label><input id="f_barcode" class="mono" placeholder="－"></div>
+      <div class="field"><label>Item No.</label><input id="f_item_no" class="mono" placeholder="－"></div>
+      <div class="field full"><label>正嘜 Front Mark（變數用 [變數名] 標記）</label><textarea id="f_front_mark" rows="5" placeholder="－"></textarea></div>
+      <div class="field full"><label>側嘜 Side Mark（變數用 [變數名] 標記）</label><textarea id="f_side_mark" rows="5" placeholder="－"></textarea></div>
+      <div class="field full"><label>印刷 / 特殊備注</label><textarea id="f_notes" rows="3" placeholder="－"></textarea></div>
+    </div>
+  </div>
+
+  <div class="btn-row" id="saveRow" style="display:none">
+    <button class="btn btn-success" id="saveBtn">☁ 儲存到試算表</button>
+    <button class="btn btn-primary" id="printBtn">🖨 列印派工單</button>
+    <button class="btn btn-secondary" id="exportBtn">⬇ 匯出 CSV</button>
+  </div>
+  <div id="printArea"></div>
+</div>
+</div>
+
+<!-- ══ TAB: 客戶資料庫 ══ -->
+<div class="tab-panel" id="tab-customers">
+<div class="container">
+  <div class="customer-form">
+    <h3 id="custFormTitle">➕ 新增客戶</h3>
+    <div class="form-grid">
+      <div class="form-group"><label>客戶名稱 *</label><input id="c_name" placeholder="例：金岱交通器材有限公司"></div>
+      <div class="form-group"><label>統一編號</label><input id="c_taxid" placeholder=""></div>
+      <div class="form-group"><label>聯絡人</label><input id="c_contact" placeholder=""></div>
+      <div class="form-group"><label>電話</label><input id="c_phone" placeholder="(04)787-0550"></div>
+      <div class="form-group"><label>傳真</label><input id="c_fax" placeholder=""></div>
+      <div class="form-group full"><label>地址</label><input id="c_address" placeholder=""></div>
+      <div class="form-group"><label>Logo 備注</label><input id="c_logo" placeholder="例：Logo檔案另附，見桌面資料夾"></div>
+      <div class="form-group"><label>備注</label><input id="c_note" placeholder=""></div>
+      <div class="form-group full">
+        <label>正嘜範本（固定文字直接寫，變數用 [變數名]）</label>
+        <textarea id="c_front" rows="6" placeholder="例：&#10;ICHINEN AXESS&#10;P/O NO. [採購單號]&#10;DATE: [日期]&#10;KOBE&#10;C/NO.&#10;MADE IN TAIWAN."></textarea>
+        <div class="var-hint">常用變數：[箱號] [料號] [採購單號] [日期] [數量] [淨重] [毛重] [材積] [庫存號]</div>
+      </div>
+      <div class="form-group full">
+        <label>側嘜範本（固定文字直接寫，變數用 [變數名]）</label>
+        <textarea id="c_side" rows="6" placeholder="例：&#10;ITEM NO : [料號]&#10;STOCK : [庫存號]&#10;Q'TY : [數量] PCS&#10;N.W. : [淨重] KGS&#10;G.W. : [毛重] KGS&#10;CUFT : [材積]"></textarea>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-success" onclick="saveCustomer()">☁ 儲存客戶資料</button>
+      <button class="btn btn-secondary" onclick="clearCustForm()">清除</button>
+    </div>
+    <div id="custStatus" class="status-bar" style="display:none"></div>
+  </div>
+
+  <div class="history-section">
+    <h3>客戶清單</h3>
+    <div id="customerList"><div class="empty-state">載入中...</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ══ TAB: 訂單紀錄 ══ -->
+<div class="tab-panel" id="tab-history">
+<div class="container">
+  <div class="btn-row">
+    <button class="btn btn-secondary" onclick="loadOrders()">🔄 重新載入</button>
+    <button class="btn btn-secondary" id="exportAllBtn">⬇ 匯出 CSV</button>
+  </div>
+  <div id="ordersStatus" class="status-bar" style="display:none"></div>
+  <div class="history-section">
+    <h3>訂單紀錄（從 Google 試算表）</h3>
+    <div id="ordersList"><div class="empty-state">點「重新載入」取得最新資料</div></div>
+  </div>
+</div>
+</div>
+
+<script>
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzXvT3OkQoOKZ2XmmrtFBKhxg9OuTCphL66klI1sJBeSqczxUuKhCZZKMdzzXN_AqJ3/exec';
+
+let fileBase64 = null, fileType = null;
+let customers = []; // [{id,name,contact,phone,fax,address,taxId,logo,note,frontMark,sideMark}]
+let currentCustomer = null;
+
+// ── Tab ──
+function switchTab(tab) {
+  document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', ['scan','customers','history'][i]===tab));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  if (tab==='customers') loadCustomers();
+  if (tab==='history') loadOrders();
+}
+
+// ── GAS helpers ──
+async function gasGet(action) {
+  const res = await fetch(`${GAS_URL}?action=${action}`);
+  const d = await res.json();
+  return d.success ? d.data : [];
+}
+async function gasPost(payload) {
+  const res = await fetch(GAS_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain'},
+    body: JSON.stringify(payload)
+  });
+  return await res.json();
+}
+
+// ── Customer DB ──
+async function loadCustomers() {
+  document.getElementById('customerList').innerHTML = '<div class="empty-state">載入中...</div>';
+  try {
+    const rows = await gasGet('getCustomers');
+    customers = [];
+    if (rows.length > 1) {
+      rows.slice(1).forEach(r => {
+        if (r[1]) customers.push({id:r[0],name:r[1],contact:r[2],phone:r[3],fax:r[4],address:r[5],taxId:r[6],logo:r[7],note:r[8],frontMark:r[9]||'',sideMark:r[10]||''});
+      });
+    }
+    renderCustomerList();
+    refreshCustomerSelect();
+  } catch(e) {
+    document.getElementById('customerList').innerHTML = `<div class="empty-state">載入失敗：${e.message}</div>`;
+  }
+}
+
+function renderCustomerList() {
+  const el = document.getElementById('customerList');
+  if (!customers.length) { el.innerHTML = '<div class="empty-state">尚無客戶資料，請新增</div>'; return; }
+  el.innerHTML = `<table>
+    <thead><tr><th>客戶名稱</th><th>電話</th><th>聯絡人</th><th>正嘜範本</th><th>操作</th></tr></thead>
+    <tbody>${customers.map(c => `<tr>
+      <td><strong>${c.name}</strong></td>
+      <td>${c.phone||'－'}</td>
+      <td>${c.contact||'－'}</td>
+      <td style="font-size:11px;font-family:monospace;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(c.frontMark||'未設定').replace(/\n/g,' / ')}</td>
+      <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:11px" onclick="editCustomer('${c.id}')">編輯</button></td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+function refreshCustomerSelect() {
+  const sel = document.getElementById('f_customer_sel');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">── 選擇客戶 ──</option>' + customers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  if (cur) sel.value = cur;
+}
+
+function onCustomerSelect() {
+  const id = document.getElementById('f_customer_sel').value;
+  currentCustomer = customers.find(c => c.id === id) || null;
+  const matchEl = document.getElementById('customerMatch');
+  const markEl = document.getElementById('markLoaded');
+  if (currentCustomer) {
+    matchEl.classList.add('show');
+    document.getElementById('customerMatchText').textContent = `已選擇：${currentCustomer.name}`;
+    if (currentCustomer.frontMark || currentCustomer.sideMark) {
+      document.getElementById('f_front_mark').value = currentCustomer.frontMark || '';
+      document.getElementById('f_side_mark').value = currentCustomer.sideMark || '';
+      markEl.classList.add('show');
+      document.getElementById('markLoadedText').textContent = '麥頭範本已載入，請填入各 [變數] 的實際數值';
+    } else {
+      markEl.classList.remove('show');
+    }
+  } else {
+    matchEl.classList.remove('show');
+    markEl.classList.remove('show');
+  }
+}
+
+async function saveCustomer() {
+  const name = document.getElementById('c_name').value.trim();
+  if (!name) { alert('請填寫客戶名稱'); return; }
+  showCustStatus('loading','儲存中...');
+  const payload = {
+    action:'saveCustomer',
+    customerId: 'C'+ Date.now(),
+    name, contact:document.getElementById('c_contact').value,
+    phone:document.getElementById('c_phone').value,
+    fax:document.getElementById('c_fax').value,
+    address:document.getElementById('c_address').value,
+    taxId:document.getElementById('c_taxid').value,
+    logoNote:document.getElementById('c_logo').value,
+    notes:document.getElementById('c_note').value,
+    frontMark:document.getElementById('c_front').value,
+    sideMark:document.getElementById('c_side').value
+  };
+  try {
+    const r = await gasPost(payload);
+    if (r.success) { showCustStatus('success','✓ 客戶資料已儲存到 Google 試算表！'); clearCustForm(); loadCustomers(); }
+    else showCustStatus('error','儲存失敗：'+r.error);
+  } catch(e) { showCustStatus('error','儲存失敗：'+e.message); }
+}
+
+function editCustomer(id) {
+  const c = customers.find(x=>x.id===id);
+  if (!c) return;
+  document.getElementById('custFormTitle').textContent = '✏️ 編輯客戶：'+c.name;
+  document.getElementById('c_name').value = c.name||'';
+  document.getElementById('c_taxid').value = c.taxId||'';
+  document.getElementById('c_contact').value = c.contact||'';
+  document.getElementById('c_phone').value = c.phone||'';
+  document.getElementById('c_fax').value = c.fax||'';
+  document.getElementById('c_address').value = c.address||'';
+  document.getElementById('c_logo').value = c.logo||'';
+  document.getElementById('c_note').value = c.note||'';
+  document.getElementById('c_front').value = c.frontMark||'';
+  document.getElementById('c_side').value = c.sideMark||'';
+  window.scrollTo(0,0);
+}
+
+function clearCustForm() {
+  ['c_name','c_taxid','c_contact','c_phone','c_fax','c_address','c_logo','c_note','c_front','c_side'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('custFormTitle').textContent='➕ 新增客戶';
+}
+
+function showCustStatus(type,msg) {
+  const el=document.getElementById('custStatus');
+  el.className='status-bar '+type; el.style.display='flex';
+  el.innerHTML=type==='loading'?`<div class="spinner"></div><span>${msg}</span>`:`<span>${msg}</span>`;
+}
+
+// ── Orders ──
+async function loadOrders() {
+  showOrdersStatus('loading','載入訂單紀錄...');
+  try {
+    const rows = await gasGet('getOrders');
+    const el = document.getElementById('ordersList');
+    if (rows.length<=1) { el.innerHTML='<div class="empty-state">尚無訂單紀錄</div>'; hideOrdersStatus(); return; }
+    const data = rows.slice(1).filter(r=>r[0]);
+    el.innerHTML=`<table>
+      <thead><tr><th>日期</th><th>客戶</th><th>品名</th><th>外箱尺寸</th><th>數量</th><th>交貨日期</th><th>狀態</th></tr></thead>
+      <tbody>${data.map(r=>`<tr>
+        <td style="font-size:11px">${r[1]||''}</td>
+        <td>${r[2]||''}</td>
+        <td style="font-size:12px">${r[3]||''}</td>
+        <td style="font-family:monospace;font-size:12px">${r[4]||''}</td>
+        <td>${r[6]||''}</td>
+        <td style="color:var(--accent);font-weight:600">${r[10]||''}</td>
+        <td><span class="tag">${r[14]||'待出貨'}</span></td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+    hideOrdersStatus();
+
+    document.getElementById('exportAllBtn').onclick = () => {
+      const csv = [['訂單ID','日期','客戶','品名','外箱尺寸','外箱用料','數量','內箱尺寸','內箱用料','內箱數','交貨日','正嘜','側嘜','備注','狀態'].join(','),
+        ...data.map(r=>r.map(c=>`"${(c||'').toString().replace(/"/g,'""')}"`).join(','))].join('\n');
+      const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));
+      a.download=`訂單紀錄_${new Date().toLocaleDateString('zh-TW').replace(/\//g,'-')}.csv`; a.click();
+    };
+  } catch(e) { showOrdersStatus('error','載入失敗：'+e.message); }
+}
+
+function showOrdersStatus(type,msg){const el=document.getElementById('ordersStatus');el.className='status-bar '+type;el.style.display='flex';el.innerHTML=type==='loading'?`<div class="spinner"></div><span>${msg}</span>`:`<span>${msg}</span>`;}
+function hideOrdersStatus(){document.getElementById('ordersStatus').style.display='none';}
+
+// ── Upload & Analyze ──
+const uploadZone=document.getElementById('uploadZone'),fileInput=document.getElementById('fileInput');
+const statusBar=document.getElementById('statusBar'),actionRow=document.getElementById('actionRow');
+const analyzeBtn=document.getElementById('analyzeBtn'),resultCard=document.getElementById('resultCard');
+const saveRow=document.getElementById('saveRow');
+
+uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.classList.add('drag')});
+uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('drag'));
+uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.remove('drag');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0])});
+fileInput.addEventListener('change',()=>{if(fileInput.files[0])handleFile(fileInput.files[0])});
+
+function handleFile(file){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const url=e.target.result;
+    fileBase64=url.split(',')[1]; fileType=file.type;
+    document.getElementById('uploadContent').innerHTML=`<img src="${url}" class="preview-img"><p style="font-size:12px;color:var(--ink-light)">${file.name}</p>`;
+    actionRow.style.display='flex'; resultCard.classList.remove('show'); saveRow.style.display='none'; hideStatus();
+  };
+  reader.readAsDataURL(file);
+}
+
+document.getElementById('resetBtn').addEventListener('click',()=>{
+  fileBase64=null; fileInput.value='';
+  document.getElementById('uploadContent').innerHTML=`<div class="upload-icon">📄</div><h3>點擊上傳或拖曳訂單圖片</h3><p>支援 JPG、PNG、PDF（傳真掃描、拍照皆可）</p>`;
+  actionRow.style.display='none'; resultCard.classList.remove('show'); saveRow.style.display='none'; hideStatus();
+});
+
+analyzeBtn.addEventListener('click', analyze);
+async function analyze(){
+  if(!fileBase64) return;
+  analyzeBtn.disabled=true;
+  showStatus('loading','正在辨識訂單內容...');
+  try {
+    const mt=fileType==='application/pdf'?'application/pdf':(fileType||'image/jpeg');
+    const ct=mt==='application/pdf'?'document':'image';
+    const PROMPT=`你是台灣紙箱工廠的訂單辨識助手。請分析這張訂製單圖片，萃取以下欄位，以純 JSON 格式回傳（不要加任何說明文字或 markdown）：
+{"customer":"客戶名稱","order_no":"訂單號碼","order_date":"訂貨日期","delivery_date":"交貨日期","product":"品名或型號","outer_qty":"外箱數量（含單位）","outer_size":"外箱尺寸（長×寬×高 台分）","inner_size":"內箱尺寸（長×寬×高 台分）","inner_qty":"內箱數量","barcode":"條碼","item_no":"Item No.","front_mark":"正嘜完整文字","side_mark":"側嘜完整文字","notes":"印刷要求與特殊備注"}
+若某欄位不清楚填入空字串。只回傳 JSON。`;
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:[{type:ct,source:{type:'base64',media_type:mt,data:fileBase64}},{type:'text',text:PROMPT}]}]})});
+    const data=await res.json();
+    const text=data.content?.map(c=>c.text||'').join('')||'';
+    const parsed=JSON.parse(text.replace(/```json|```/g,'').trim());
+    fillForm(parsed);
+    showStatus('success','✓ 辨識完成！請確認資料後儲存。');
+    resultCard.classList.add('show'); saveRow.style.display='flex';
+    // Auto-match customer
+    autoMatchCustomer(parsed.customer||'');
+  } catch(e){ showStatus('error','辨識失敗：'+e.message); }
+  analyzeBtn.disabled=false;
+}
+
+function autoMatchCustomer(name){
+  if(!name||!customers.length) return;
+  const match=customers.find(c=>name.includes(c.name.slice(0,4))||c.name.includes(name.slice(0,4)));
+  if(match){
+    document.getElementById('f_customer_sel').value=match.id;
+    onCustomerSelect();
+  }
+}
+
+function fillForm(d){
+  document.getElementById('f_order_no').value=d.order_no||'';
+  document.getElementById('f_order_date').value=d.order_date||'';
+  document.getElementById('f_delivery_date').value=d.delivery_date||'';
+  document.getElementById('f_product').value=d.product||'';
+  document.getElementById('f_outer_qty').value=d.outer_qty||'';
+  document.getElementById('f_outer_size').value=d.outer_size||'';
+  document.getElementById('f_inner_size').value=d.inner_size||'';
+  document.getElementById('f_barcode').value=d.barcode||'';
+  document.getElementById('f_item_no').value=d.item_no||'';
+  // Only fill mark if no customer template loaded
+  if(!currentCustomer){
+    document.getElementById('f_front_mark').value=d.front_mark||d.mark||'';
+    document.getElementById('f_side_mark').value=d.side_mark||'';
+  }
+  document.getElementById('f_notes').value=d.notes||'';
+  document.getElementById('orderNoDisplay').textContent=d.order_no||'';
+}
+
+function getFormData(){
+  const custId=document.getElementById('f_customer_sel').value;
+  const cust=customers.find(c=>c.id===custId);
+  return {
+    customer:cust?cust.name:(document.getElementById('f_customer_sel').options[document.getElementById('f_customer_sel').selectedIndex]?.text||''),
+    customerId:custId,
+    order_no:document.getElementById('f_order_no').value,
+    order_date:document.getElementById('f_order_date').value,
+    delivery_date:document.getElementById('f_delivery_date').value,
+    product:document.getElementById('f_product').value,
+    outer_qty:document.getElementById('f_outer_qty').value,
+    outer_size:document.getElementById('f_outer_size').value,
+    inner_size:document.getElementById('f_inner_size').value,
+    barcode:document.getElementById('f_barcode').value,
+    item_no:document.getElementById('f_item_no').value,
+    front_mark:document.getElementById('f_front_mark').value,
+    side_mark:document.getElementById('f_side_mark').value,
+    notes:document.getElementById('f_notes').value,
+    saved_at:new Date().toLocaleString('zh-TW')
+  };
+}
+
+// ── Save Order ──
+document.getElementById('saveBtn').addEventListener('click', async()=>{
+  const d=getFormData();
+  if(!d.customer||d.customer==='── 選擇客戶 ──'){alert('請先選擇客戶');return;}
+  showStatus('loading','儲存到 Google 試算表...');
+  try{
+    // Calc materials
+    const outerM=calcMaterial(d.outer_size,'outer');
+    const innerM=calcMaterial(d.inner_size,'inner');
+    const r=await gasPost({
+      action:'saveOrder',
+      orderId:'O'+Date.now(),
+      date:d.saved_at,
+      customer:d.customer,
+      product:d.product,
+      outerSize:d.outer_size,
+      outerMaterial:outerM,
+      outerQty:d.outer_qty,
+      innerSize:d.inner_size,
+      innerMaterial:innerM,
+      innerQty:'',
+      delivery:d.delivery_date,
+      frontMark:d.front_mark,
+      sideMark:d.side_mark,
+      notes:d.notes,
+    });
+    if(r.success) showStatus('success','✓ 訂單已儲存到 Google 試算表！');
+    else showStatus('error','儲存失敗：'+r.error);
+  }catch(e){showStatus('error','儲存失敗：'+e.message);}
+});
+
+// ── Material Calc ──
+function parseSize(str){
+  if(!str) return null;
+  const p=str.replace(/[×xX*\s]/g,'×').split('×').map(s=>parseFloat(s));
+  return p.length===3&&p.every(n=>!isNaN(n))?{l:p[0],w:p[1],h:p[2]}:null;
+}
+function calcMaterial(size,type){
+  const s=parseSize(size); if(!s) return '';
+  if(type==='outer'){return `${s.w+s.h+2} × ${(s.l+s.w)*2+12}`;}
+  else{return `${s.w+s.h} × ${(s.l+s.w)*2+8}`;}
+}
+
+// ── Print ──
+document.getElementById('printBtn').addEventListener('click',()=>{
+  const d=getFormData();
+  const now=new Date().toLocaleDateString('zh-TW');
+  const outerM=calcMaterial(d.outer_size,'outer');
+  const innerM=calcMaterial(d.inner_size,'inner');
+  document.getElementById('printArea').innerHTML=`
+  <div class="po-sheet">
+    <div class="po-top">
+      <div><div class="po-title">生　產　工　單</div><div class="po-company">紙箱製造廠　｜　${now}</div></div>
+      <div class="po-meta">
+        <div class="order-id">No. ${d.order_no||'－'}</div>
+        <div>交貨日期　<strong style="color:#c0392b;font-size:15px">${d.delivery_date||'－'}</strong></div>
+        <div>訂貨日期　${d.order_date||'－'}</div>
+      </div>
+    </div>
+    <div class="po-grid">
+      <div class="po-cell span2"><div class="po-cell-label">客戶名稱</div><div class="po-cell-value big">${d.customer||'－'}</div></div>
+      <div class="po-cell"><div class="po-cell-label">品名 / 型號</div><div class="po-cell-value">${d.product||'－'}</div></div>
+      <div class="po-cell"><div class="po-cell-label">五層外箱（長×寬×高）</div><div class="po-cell-value mono big">${d.outer_size||'－'}</div></div>
+      <div class="po-cell"><div class="po-cell-label">外箱用料（寬×長 台分）</div><div class="po-cell-value mono big red">${outerM||'－'}</div></div>
+      <div class="po-cell"><div class="po-cell-label">外箱數量</div><div class="po-cell-value big red">${d.outer_qty||'－'}</div></div>
+      ${d.inner_size?`
+      <div class="po-cell"><div class="po-cell-label">三層內箱（長×寬×高）</div><div class="po-cell-value mono big">${d.inner_size}</div></div>
+      <div class="po-cell"><div class="po-cell-label">內箱用料（寬×長 台分）</div><div class="po-cell-value mono big" style="color:#b7770d">${innerM}</div></div>
+      <div class="po-cell"><div class="po-cell-label">內箱數量</div><div class="po-cell-value big">－</div></div>`:''}
+      <div class="po-cell"><div class="po-cell-label">Item No.</div><div class="po-cell-value mono">${d.item_no||'－'}</div></div>
+      <div class="po-cell span2"><div class="po-cell-label">條碼</div><div class="po-cell-value mono">${d.barcode||'－'}</div></div>
+    </div>
+    <div class="po-mark-box">
+      <div class="po-mark-header">▌ 麥頭內容（印刷稿）</div>
+      <div class="po-mark-body">
+        <div class="po-mark-col"><div class="po-mark-col-title">正嘜 Front Mark</div><div class="po-mark-text">${d.front_mark||'－'}</div></div>
+        <div class="po-mark-col"><div class="po-mark-col-title">側嘜 Side Mark</div><div class="po-mark-text">${d.side_mark||'－'}</div></div>
+      </div>
+    </div>
+    ${d.notes?`<div class="po-notes-box"><div class="po-notes-label">特殊印刷要求 / 備注</div><div class="po-notes-text">${d.notes}</div></div>`:''}
+    <div class="po-sign">
+      <div class="po-sign-box">接單確認</div>
+      <div class="po-sign-box">生產負責</div>
+      <div class="po-sign-box">品管確認</div>
+    </div>
+  </div>`;
+  window.print();
+});
+
+// ── Export CSV ──
+document.getElementById('exportBtn').addEventListener('click',()=>{
+  const d=getFormData();
+  const headers=['客戶','訂單號','訂貨日','交貨日','品名','外箱尺寸','外箱用料','外箱數','內箱尺寸','內箱用料','條碼','Item No.','正嘜','側嘜','備注'];
+  const vals=[d.customer,d.order_no,d.order_date,d.delivery_date,d.product,d.outer_size,calcMaterial(d.outer_size,'outer'),d.outer_qty,d.inner_size,calcMaterial(d.inner_size,'inner'),d.barcode,d.item_no,d.front_mark,d.side_mark,d.notes];
+  const csv=[headers.join(','),vals.map(v=>`"${(v||'').replace(/"/g,'""')}"`).join(',')].join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));
+  a.download=`訂單_${d.order_no||'draft'}_${new Date().toLocaleDateString('zh-TW').replace(/\//g,'-')}.csv`; a.click();
+});
+
+function showStatus(type,msg){statusBar.className='status-bar '+type;statusBar.style.display='flex';statusBar.innerHTML=type==='loading'?`<div class="spinner"></div><span>${msg}</span>`:`<span>${msg}</span>`;}
+function hideStatus(){statusBar.style.display='none';}
+
+// ── Init ──
+loadCustomers();
+
+// ── PWA Install ──
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('installBtn').style.display = 'inline-block';
+});
+async function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  document.getElementById('installBtn').style.display = 'none';
+}
+window.addEventListener('appinstalled', () => {
+  document.getElementById('installBtn').style.display = 'none';
+});
+</script>
+</body>
+</html>
