@@ -470,14 +470,9 @@ async function analyze(){
   showStatus('loading','正在辨識訂單內容...');
   try {
     const mt=fileType==='application/pdf'?'application/pdf':(fileType||'image/jpeg');
-    const ct=mt==='application/pdf'?'document':'image';
-    const PROMPT=`你是台灣紙箱工廠的訂單辨識助手。請分析這張訂製單圖片，萃取以下欄位，以純 JSON 格式回傳（不要加任何說明文字或 markdown）：
-{"customer":"客戶名稱","order_no":"訂單號碼","order_date":"訂貨日期","delivery_date":"交貨日期","product":"品名或型號","outer_qty":"外箱數量（含單位）","outer_size":"外箱尺寸（長×寬×高 台分）","inner_size":"內箱尺寸（長×寬×高 台分）","inner_qty":"內箱數量","barcode":"條碼","item_no":"Item No.","front_mark":"正嘜完整文字","side_mark":"側嘜完整文字","notes":"印刷要求與特殊備注"}
-若某欄位不清楚填入空字串。只回傳 JSON。`;
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:[{type:ct,source:{type:'base64',media_type:mt,data:fileBase64}},{type:'text',text:PROMPT}]}]})});
-    const data=await res.json();
-    const text=data.content?.map(c=>c.text||'').join('')||'';
-    const parsed=JSON.parse(text.replace(/```json|```/g,'').trim());
+    const r=await gasPost({action:'analyzeOrder', fileBase64, mediaType:mt});
+    if(!r.success) throw new Error(r.error||'辨識失敗');
+    const parsed=r.data;
     fillForm(parsed);
     showStatus('success','✓ 辨識完成！請確認資料後儲存。');
     resultCard.classList.add('show'); saveRow.style.display='flex';
