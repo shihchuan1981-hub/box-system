@@ -262,6 +262,8 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbzXvT3OkQoOKZ2XmmrtFBKh
 let fileBase64 = null, fileType = null;
 let customers = []; // [{id,name,contact,phone,fax,address,taxId,logo,note,frontMark,sideMark}]
 let currentCustomer = null;
+let orderRows = [];
+let editingOrderId = null;
 
 // ── Tab ──
 function switchTab(tab) {
@@ -409,8 +411,9 @@ async function loadOrders() {
     const el = document.getElementById('ordersList');
     if (rows.length<=1) { el.innerHTML='<div class="empty-state">尚無訂單紀錄</div>'; hideOrdersStatus(); return; }
     const data = rows.slice(1).filter(r=>r[0]);
+    orderRows = data;
     el.innerHTML=`<table>
-      <thead><tr><th>日期</th><th>客戶</th><th>品名</th><th>外箱尺寸</th><th>數量</th><th>交貨日期</th><th>狀態</th></tr></thead>
+      <thead><tr><th>日期</th><th>客戶</th><th>品名</th><th>外箱尺寸</th><th>數量</th><th>交貨日期</th><th>狀態</th><th>操作</th></tr></thead>
       <tbody>${data.map(r=>`<tr>
         <td style="font-size:11px">${r[1]||''}</td>
         <td>${r[2]||''}</td>
@@ -418,7 +421,10 @@ async function loadOrders() {
         <td style="font-family:monospace;font-size:12px">${r[4]||''}</td>
         <td>${r[6]||''}</td>
         <td style="color:var(--accent);font-weight:600">${r[10]||''}</td>
-        <td><span class="tag">${r[14]||'待出貨'}</span></td>
+        <td><select onchange="changeOrderStatus('${r[0]}', this.value)" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;font-family:inherit">
+          ${['待出貨','已出貨','已取消'].map(s=>`<option value="${s}" ${(r[14]||'待出貨')===s?'selected':''}>${s}</option>`).join('')}
+        </select></td>
+        <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:11px" onclick="editOrder('${r[0]}')">編輯</button></td>
       </tr>`).join('')}</tbody>
     </table>`;
     hideOrdersStatus();
@@ -435,6 +441,51 @@ async function loadOrders() {
 function showOrdersStatus(type,msg){const el=document.getElementById('ordersStatus');el.className='status-bar '+type;el.style.display='flex';el.innerHTML=type==='loading'?`<div class="spinner"></div><span>${msg}</span>`:`<span>${msg}</span>`;}
 function hideOrdersStatus(){document.getElementById('ordersStatus').style.display='none';}
 
+async function changeOrderStatus(orderId, status) {
+  try {
+    const r = await gasPost({action:'updateOrderStatus', orderId, status});
+    if (!r.success) { alert('更新失敗：'+r.error); loadOrders(); return; }
+    const row = orderRows.find(x=>x[0]===orderId);
+    if (row) row[14] = status;
+  } catch(e) { alert('更新失敗：'+e.message); loadOrders(); }
+}
+
+function editOrder(orderId) {
+  const r = orderRows.find(x => x[0] === orderId);
+  if (!r) return;
+  editingOrderId = orderId;
+  fileBase64 = null; fileInput.value = '';
+  document.getElementById('uploadContent').innerHTML = `<div class="upload-icon">✏️</div><h3>編輯模式 — 訂單 ${orderId}</h3><p>不需要重新上傳圖片，直接修改下方欄位後儲存即可</p>`;
+  actionRow.style.display = 'none';
+  hideStatus();
+
+  const match = customers.find(c => c.name === r[2]);
+  document.getElementById('f_customer_sel').value = match ? match.id : '';
+  currentCustomer = match || null;
+  document.getElementById('customerMatch').classList.toggle('show', !!match);
+  if (match) document.getElementById('customerMatchText').textContent = `已選擇：${match.name}`;
+  document.getElementById('markLoaded').classList.remove('show');
+
+  document.getElementById('f_order_no').value = orderId;
+  document.getElementById('f_order_date').value = '';
+  document.getElementById('f_delivery_date').value = r[10]||'';
+  document.getElementById('f_product').value = r[3]||'';
+  document.getElementById('f_outer_qty').value = r[6]||'';
+  document.getElementById('f_outer_size').value = r[4]||'';
+  document.getElementById('f_inner_size').value = r[7]||'';
+  document.getElementById('f_barcode').value = '';
+  document.getElementById('f_item_no').value = '';
+  document.getElementById('f_front_mark').value = r[11]||'';
+  document.getElementById('f_side_mark').value = r[12]||'';
+  document.getElementById('f_notes').value = r[13]||'';
+  document.getElementById('orderNoDisplay').textContent = orderId;
+
+  resultCard.classList.add('show');
+  saveRow.style.display = 'flex';
+  document.getElementById('saveBtn').innerHTML = '☁ 更新訂單';
+  switchTab('scan');
+}
+
 // ── Upload & Analyze ──
 const uploadZone=document.getElementById('uploadZone'),fileInput=document.getElementById('fileInput');
 const statusBar=document.getElementById('statusBar'),actionRow=document.getElementById('actionRow');
@@ -447,6 +498,8 @@ uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.r
 fileInput.addEventListener('change',()=>{if(fileInput.files[0])handleFile(fileInput.files[0])});
 
 function handleFile(file){
+  editingOrderId=null;
+  document.getElementById('saveBtn').innerHTML='☁ 儲存到試算表';
   const reader=new FileReader();
   reader.onload=e=>{
     const url=e.target.result;
@@ -458,7 +511,8 @@ function handleFile(file){
 }
 
 document.getElementById('resetBtn').addEventListener('click',()=>{
-  fileBase64=null; fileInput.value='';
+  fileBase64=null; fileInput.value=''; editingOrderId=null;
+  document.getElementById('saveBtn').innerHTML='☁ 儲存到試算表';
   document.getElementById('uploadContent').innerHTML=`<div class="upload-icon">📄</div><h3>點擊上傳或拖曳訂單圖片</h3><p>支援 JPG、PNG、PDF（傳真掃描、拍照皆可）</p>`;
   actionRow.style.display='none'; resultCard.classList.remove('show'); saveRow.style.display='none'; hideStatus();
 });
@@ -536,14 +590,15 @@ function getFormData(){
 document.getElementById('saveBtn').addEventListener('click', async()=>{
   const d=getFormData();
   if(!d.customer||d.customer==='── 選擇客戶 ──'){alert('請先選擇客戶');return;}
-  showStatus('loading','儲存到 Google 試算表...');
+  const isEdit = !!editingOrderId;
+  showStatus('loading', isEdit ? '更新試算表中...' : '儲存到 Google 試算表...');
   try{
     // Calc materials
     const outerM=calcMaterial(d.outer_size,'outer');
     const innerM=calcMaterial(d.inner_size,'inner');
     const r=await gasPost({
       action:'saveOrder',
-      orderId:'O'+Date.now(),
+      orderId: editingOrderId || ('O'+Date.now()),
       date:d.saved_at,
       customer:d.customer,
       product:d.product,
@@ -558,8 +613,11 @@ document.getElementById('saveBtn').addEventListener('click', async()=>{
       sideMark:d.side_mark,
       notes:d.notes,
     });
-    if(r.success) showStatus('success','✓ 訂單已儲存到 Google 試算表！');
-    else showStatus('error','儲存失敗：'+r.error);
+    if(r.success){
+      showStatus('success', isEdit ? '✓ 訂單已更新！' : '✓ 訂單已儲存到 Google 試算表！');
+      editingOrderId=null;
+      document.getElementById('saveBtn').innerHTML='☁ 儲存到試算表';
+    } else showStatus('error','儲存失敗：'+r.error);
   }catch(e){showStatus('error','儲存失敗：'+e.message);}
 });
 
