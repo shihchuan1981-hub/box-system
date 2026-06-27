@@ -76,6 +76,8 @@ header .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11p
 .customer-match.show{display:flex;align-items:center;gap:8px}
 .mark-loaded{background:var(--warning-light);border:1px solid #f6cc7a;border-radius:4px;padding:8px 12px;font-size:12px;color:var(--warning);margin-bottom:12px;display:none}
 .mark-loaded.show{display:flex;align-items:center;gap:8px}
+.multi-nav{background:var(--tag-bg);border:1px solid var(--border);border-radius:4px;padding:8px 12px;font-size:12px;color:var(--ink);margin-bottom:12px;display:none;align-items:center;justify-content:space-between}
+.multi-nav.show{display:flex}
 table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden;font-size:13px}
 th{background:var(--tag-bg);padding:9px 12px;text-align:left;font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--ink-light);text-transform:uppercase;border-bottom:1px solid var(--border)}
 td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--ink)}
@@ -166,6 +168,13 @@ tr:hover td{background:var(--accent-light)}
 
   <div class="customer-match" id="customerMatch">✓ <span id="customerMatchText"></span></div>
   <div class="mark-loaded" id="markLoaded">📋 <span id="markLoadedText"></span></div>
+  <div class="multi-nav" id="multiNav">
+    <span id="multiNavText"></span>
+    <span>
+      <button class="btn btn-secondary" style="padding:3px 10px;font-size:11px" onclick="prevItem()">‹ 上一筆</button>
+      <button class="btn btn-secondary" style="padding:3px 10px;font-size:11px" onclick="nextItem()">下一筆 ›</button>
+    </span>
+  </div>
 
   <div class="result-card" id="resultCard">
     <div class="card-header">
@@ -264,6 +273,8 @@ let customers = []; // [{id,name,contact,phone,fax,address,taxId,logo,note,front
 let currentCustomer = null;
 let orderRows = [];
 let editingOrderId = null;
+let recognizedItems = [];
+let recognizedIndex = 0;
 
 // ── Tab ──
 function switchTab(tab) {
@@ -455,6 +466,8 @@ function editOrder(orderId) {
   if (!r) return;
   editingOrderId = orderId;
   fileBase64 = null; fileInput.value = '';
+  recognizedItems = []; recognizedIndex = 0;
+  document.getElementById('multiNav').classList.remove('show');
   document.getElementById('uploadContent').innerHTML = `<div class="upload-icon">✏️</div><h3>編輯模式 — 訂單 ${orderId}</h3><p>不需要重新上傳圖片，直接修改下方欄位後儲存即可</p>`;
   actionRow.style.display = 'none';
   hideStatus();
@@ -499,6 +512,8 @@ fileInput.addEventListener('change',()=>{if(fileInput.files[0])handleFile(fileIn
 
 function handleFile(file){
   editingOrderId=null;
+  recognizedItems=[]; recognizedIndex=0;
+  document.getElementById('multiNav').classList.remove('show');
   document.getElementById('saveBtn').innerHTML='☁ 儲存到試算表';
   const reader=new FileReader();
   reader.onload=e=>{
@@ -512,6 +527,8 @@ function handleFile(file){
 
 document.getElementById('resetBtn').addEventListener('click',()=>{
   fileBase64=null; fileInput.value=''; editingOrderId=null;
+  recognizedItems=[]; recognizedIndex=0;
+  document.getElementById('multiNav').classList.remove('show');
   document.getElementById('saveBtn').innerHTML='☁ 儲存到試算表';
   document.getElementById('uploadContent').innerHTML=`<div class="upload-icon">📄</div><h3>點擊上傳或拖曳訂單圖片</h3><p>支援 JPG、PNG、PDF（傳真掃描、拍照皆可）</p>`;
   actionRow.style.display='none'; resultCard.classList.remove('show'); saveRow.style.display='none'; hideStatus();
@@ -526,15 +543,31 @@ async function analyze(){
     const mt=fileType==='application/pdf'?'application/pdf':(fileType||'image/jpeg');
     const r=await gasPost({action:'analyzeOrder', fileBase64, mediaType:mt});
     if(!r.success) throw new Error(r.error||'辨識失敗');
-    const parsed=r.data;
-    fillForm(parsed);
-    showStatus('success','✓ 辨識完成！請確認資料後儲存。');
+    recognizedItems=Array.isArray(r.data)?r.data:[r.data];
+    editingOrderId=null;
+    document.getElementById('saveBtn').innerHTML='☁ 儲存到試算表';
+    showRecognizedItem(0);
+    showStatus('success', recognizedItems.length>1 ? `✓ 辨識完成！共偵測到 ${recognizedItems.length} 筆品項，請逐筆確認後儲存。` : '✓ 辨識完成！請確認資料後儲存。');
     resultCard.classList.add('show'); saveRow.style.display='flex';
-    // Auto-match customer
-    autoMatchCustomer(parsed.customer||'');
   } catch(e){ showStatus('error','辨識失敗：'+e.message); }
   analyzeBtn.disabled=false;
 }
+
+function showRecognizedItem(idx){
+  recognizedIndex=idx;
+  const item=recognizedItems[idx];
+  fillForm(item);
+  autoMatchCustomer(item.customer||'');
+  const nav=document.getElementById('multiNav');
+  if(recognizedItems.length>1){
+    nav.classList.add('show');
+    document.getElementById('multiNavText').textContent=`辨識到 ${recognizedItems.length} 筆品項，目前顯示第 ${idx+1}/${recognizedItems.length} 筆`;
+  } else {
+    nav.classList.remove('show');
+  }
+}
+function prevItem(){ if(recognizedIndex>0) showRecognizedItem(recognizedIndex-1); }
+function nextItem(){ if(recognizedIndex<recognizedItems.length-1) showRecognizedItem(recognizedIndex+1); }
 
 function autoMatchCustomer(name){
   if(!name||!customers.length) return;
@@ -614,9 +647,19 @@ document.getElementById('saveBtn').addEventListener('click', async()=>{
       notes:d.notes,
     });
     if(r.success){
-      showStatus('success', isEdit ? '✓ 訂單已更新！' : '✓ 訂單已儲存到 Google 試算表！');
-      editingOrderId=null;
-      document.getElementById('saveBtn').innerHTML='☁ 儲存到試算表';
+      if (isEdit) {
+        showStatus('success','✓ 訂單已更新！');
+        editingOrderId=null;
+        document.getElementById('saveBtn').innerHTML='☁ 儲存到試算表';
+      } else {
+        const savedNo=recognizedIndex+1, total=recognizedItems.length;
+        if (total>1 && recognizedIndex<total-1) {
+          showRecognizedItem(recognizedIndex+1);
+          showStatus('success', `✓ 第 ${savedNo}/${total} 筆已儲存，已切換到下一筆，請確認後再儲存`);
+        } else {
+          showStatus('success', total>1 ? `✓ 全部 ${total} 筆品項已儲存完畢！` : '✓ 訂單已儲存到 Google 試算表！');
+        }
+      }
     } else showStatus('error','儲存失敗：'+r.error);
   }catch(e){showStatus('error','儲存失敗：'+e.message);}
 });
