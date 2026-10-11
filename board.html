@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工站看板</title>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a1714">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+:root{
+  --bg:#f5f2ed; --surface:#fff; --ink:#1a1714; --ink-2:#6b6560; --line:#d6cfc4;
+  --accent:#c0392b; --ok:#2e7d32; --ok-soft:#eef6ee; --warn:#b7770d; --warn-soft:#fdf6e8; --chip:#ece8e2;
+  --sans:'Noto Sans TC',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);margin:0}
+.wrap{max-width:1200px;margin:0 auto;padding:12px 16px 40px;display:flex;flex-direction:column;gap:14px}
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+h1{font-size:20px;margin:0;font-weight:900}
+.meta{font-size:13px;color:var(--ink-2);display:flex;gap:12px;align-items:center}
+.meta button{font:inherit;padding:6px 12px;border:1px solid var(--line);background:var(--surface);border-radius:4px;cursor:pointer}
+.stations{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.st{font:inherit;font-size:17px;font-weight:700;padding:12px 4px;border:2px solid var(--line);background:var(--surface);color:var(--ink);border-radius:6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.st small{font-size:12px;color:var(--ink-2);font-weight:500}
+.st[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:#fff}
+.st[aria-pressed="true"] small{color:#ddd}
+.msg{padding:10px 14px;border-radius:4px;font-size:14px}
+.msg.err{background:#fdf0ef;color:var(--accent);border:1px solid #ef9a9a}
+.msg.info{background:var(--warn-soft);color:var(--warn);border:1px solid #f0cf8f}
+h2{font-size:30px;margin:0;font-weight:900}
+.head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px}
+.count{font-size:15px;color:var(--ink-2)}
+.list{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.card{background:var(--surface);border:2px solid var(--line);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:7px;min-width:0}
+.card.urgent{border-color:var(--accent);box-shadow:inset 6px 0 0 var(--accent)}
+.card.done{opacity:.5}
+.row1{display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap}
+.no{font-family:var(--mono);font-size:13px;color:var(--ink-2)}
+.pills{display:flex;gap:4px;flex-wrap:wrap}
+.pill{font-size:13px;font-weight:700;padding:3px 10px;border-radius:99px;white-space:nowrap}
+.pill.todo{background:var(--chip);color:var(--ink-2)}
+.pill.doing{background:var(--warn-soft);color:var(--warn)}
+.pill.done{background:var(--ok-soft);color:var(--ok)}
+.pill.rush{background:var(--accent);color:#fff}
+.pill.kind{background:var(--ink);color:#fff}
+.cust{font-size:22px;font-weight:900;line-height:1.25;overflow-wrap:anywhere}
+.prod{font-size:16px;color:var(--ink-2);overflow-wrap:anywhere}
+.board{display:flex;gap:10px;flex-wrap:wrap;align-items:baseline}
+.flute{font-size:15px;font-weight:700;background:var(--chip);padding:2px 8px;border-radius:4px}
+.mat{font-family:var(--mono);font-size:17px;font-weight:600;color:var(--warn)}
+.mat.big{font-size:24px}
+.lbl{font-family:var(--sans);font-size:12px;color:var(--ink-2);font-weight:500;margin-right:3px}
+.specs{display:flex;gap:16px;flex-wrap:wrap;align-items:baseline}
+.size{font-family:var(--mono);font-size:18px;font-weight:600;overflow-wrap:anywhere}
+.qty{font-size:19px;font-weight:700}
+.due{font-size:14px;color:var(--ink-2)}
+.due b{color:var(--accent)}
+.note{font-size:14px;background:var(--chip);border-radius:4px;padding:6px 8px;overflow-wrap:anywhere}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+.acts button{font:inherit;font-size:18px;font-weight:700;padding:12px;border-radius:6px;border:2px solid var(--ink);background:var(--surface);color:var(--ink);cursor:pointer}
+.acts .go-done{background:var(--ok);border-color:var(--ok);color:#fff}
+.acts button:disabled{opacity:.4;cursor:wait}
+.acts .undo{grid-column:1/-1;font-size:14px;padding:8px;border-color:var(--line);color:var(--ink-2)}
+button:focus-visible{outline:3px solid var(--warn);outline-offset:2px}
+.empty{text-align:center;padding:40px;color:var(--ink-2);background:var(--surface);border-radius:8px;border:1px dashed var(--line)}
+.overview{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:15px;min-width:680px}
+th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:center}
+th{font-size:12px;color:var(--ink-2)}
+td:first-child,th:first-child,td:nth-child(2),th:nth-child(2){text-align:left}
+tr:last-child td{border-bottom:none}
+.dot{display:inline-block;width:16px;height:16px;border-radius:50%;background:var(--chip);border:1px solid var(--line)}
+.dot.doing{background:var(--warn);border-color:var(--warn)}
+.dot.done{background:var(--ok);border-color:var(--ok)}
+.dash{color:var(--line)}
+@media (max-width:700px){.stations{grid-template-columns:repeat(3,1fr)}h2{font-size:24px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <h1>工站看板</h1>
+    <div class="meta"><span id="updated">載入中…</span><button onclick="load()">重新整理</button></div>
+  </div>
+  <nav class="stations" id="stations"></nav>
+  <div id="msg"></div>
+  <section id="stationView">
+    <div class="head"><h2 id="stTitle"></h2><div class="count" id="stCount"></div></div>
+    <div class="list" id="list" style="margin-top:10px"></div>
+  </section>
+  <section class="overview" id="overview" hidden>
+    <table><thead><tr id="ovHead"></tr></thead><tbody id="ovBody"></tbody></table>
+  </section>
+</div>
+
+<script>
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzXvT3OkQoOKZ2XmmrtFBKhxg9OuTCphL66klI1sJBeSqczxUuKhCZZKMdzzXN_AqJ3/exec';
+const STATIONS = ['裁切','印刷','開槽','釘箱','出貨'];
+const LABEL = {todo:'待做', doing:'進行中', done:'完成'};
+const $ = id => document.getElementById(id);
+let orders = [];
+// 每台平板記住自己是哪一站（-1 = 全廠總覽）
+let cur = (() => {
+  const q = new URLSearchParams(location.search).get('station');
+  if (q !== null && STATIONS.includes(q)) return STATIONS.indexOf(q);
+  if (q === '全廠') return -1;
+  try { const v = localStorage.getItem('station'); if (v !== null) return +v; } catch (e) {}
+  return -1;
+})();
+
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const stateOf = (o, s) => o.prog[s] || 'todo';
+function readyFor(o, s) { const i = o.route.indexOf(s); return i === 0 || (i > 0 && stateOf(o, o.route[i-1]) === 'done'); }
+const byPriority = (a, b) => (b.rush - a.rush) || String(a.dueKey).localeCompare(String(b.dueKey));
+
+async function load() {
+  try {
+    const res = await fetch(GAS_URL + '?action=getBoard');
+    const d = await res.json();
+    if (!d.success) throw new Error(d.error || '讀取失敗');
+    orders = d.data;
+    $('msg').innerHTML = '';
+    $('updated').textContent = '更新於 ' + new Date().toLocaleTimeString('zh-TW', {hour:'2-digit', minute:'2-digit'});
+  } catch (e) {
+    $('msg').innerHTML = `<div class="msg err">連不到試算表：${esc(e.message)}。請確認網路，等一下會自動再試。</div>`;
+  }
+  render();
+}
+
+function pick(i) { cur = i; try { localStorage.setItem('station', i); } catch (e) {} render(); }
+
+function render() {
+  $('stations').innerHTML = STATIONS.map((n, i) => {
+    const c = orders.filter(o => o.route.includes(i) && stateOf(o, i) !== 'done').length;
+    return `<button class="st" aria-pressed="${i === cur}" onclick="pick(${i})">${n}<small>${c} 張未完成</small></button>`;
+  }).join('') + `<button class="st" aria-pressed="${cur === -1}" onclick="pick(-1)">全廠<small>${orders.length} 張在做</small></button>`;
+
+  $('stationView').hidden = cur === -1;
+  $('overview').hidden = cur !== -1;
+  if (cur === -1) return renderOverview();
+
+  const mine = orders.filter(o => o.route.includes(cur))
+    .sort((a, b) => (stateOf(a, cur) === 'done') - (stateOf(b, cur) === 'done') || byPriority(a, b));
+  const waiting = mine.filter(o => !readyFor(o, cur) && stateOf(o, cur) !== 'done').length;
+  $('stTitle').textContent = STATIONS[cur];
+  $('stCount').textContent = `${mine.length} 張・其中 ${waiting} 張還在上一站`;
+  if (!mine.length) { $('list').innerHTML = '<div class="empty">這一站目前沒有排程的單</div>'; return; }
+
+  $('list').innerHTML = mine.map(o => {
+    const s = stateOf(o, cur), ready = readyFor(o, cur);
+    const pill = s === 'todo' && !ready ? '<span class="pill todo">等上一站</span>' : `<span class="pill ${s}">${LABEL[s]}</span>`;
+    const kindTag = o.kind !== '釘箱' ? `<span class="pill kind">${esc(o.kind)}</span>` : '';
+    const glue = cur === 2 && o.kind === '糊箱' ? '<div class="note"><b>開槽後糊箱</b></div>' : '';
+    const acts = s === 'done'
+      ? `<button class="undo" onclick="setState('${esc(o.no)}','doing',this)">按錯了，改回進行中</button>`
+      : `<button onclick="setState('${esc(o.no)}','doing',this)" ${s === 'doing' ? 'disabled' : ''}>開始</button>
+         <button class="go-done" onclick="setState('${esc(o.no)}','done',this)">完成</button>`;
+    return `<div class="card ${o.rush && s !== 'done' ? 'urgent' : ''} ${s === 'done' ? 'done' : ''}">
+      <div class="row1"><span class="no">${esc(o.no)}</span><span class="pills">${kindTag}${o.rush && s !== 'done' ? '<span class="pill rush">急件</span>' : ''}${pill}</span></div>
+      <div class="cust">${esc(o.cust)}</div>
+      <div class="prod">${esc(o.prod)}</div>
+      <div class="board">${o.flute ? `<span class="flute">${esc(o.flute)}・${o.layer}層</span>` : `<span class="flute">${o.layer}層</span>`}
+        ${o.material ? `<span class="mat ${cur === 0 ? 'big' : ''}"><span class="lbl">用料</span>${esc(o.material)}</span>` : ''}</div>
+      <div class="specs"><span class="size"><span class="lbl">尺寸</span>${esc(o.size)}</span><span class="qty">${esc(o.qty)}</span></div>
+      <div class="due">交貨 <b>${esc(o.due) || '－'}</b></div>
+      ${glue}${o.note ? `<div class="note">${esc(o.note)}</div>` : ''}
+      <div class="acts">${acts}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderOverview() {
+  $('ovHead').innerHTML = '<th>客戶</th><th>品名</th>' + STATIONS.map(n => `<th>${n}</th>`).join('') + '<th>交貨</th>';
+  const list = [...orders].sort(byPriority);
+  $('ovBody').innerHTML = list.length ? list.map(o => `<tr><td><b>${esc(o.cust)}</b>${o.rush ? ' <span class="pill rush">急</span>' : ''}</td><td>${esc(o.prod)}</td>${
+    STATIONS.map((_, i) => o.route.includes(i) ? `<td><span class="dot ${stateOf(o, i)}" title="${LABEL[stateOf(o, i)]}"></span></td>` : '<td class="dash">—</td>').join('')
+  }<td>${esc(o.due)}</td></tr>`).join('') : `<tr><td colspan="8" style="padding:30px;text-align:center;color:var(--ink-2)">目前沒有排程的單。到試算表「訂單紀錄」填上排程日期就會出現。</td></tr>`;
+}
+
+async function setState(no, state, btn) {
+  const o = orders.find(x => x.no === no);
+  const before = o.prog[cur];
+  o.prog[cur] = state; render();           // 先在畫面上更新，師傅不用等
+  try {
+    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({ action:'updateStation', orderId:no, station:STATIONS[cur], state }) });
+    const d = await res.json();
+    if (!d.success) throw new Error(d.error || '寫入失敗');
+  } catch (e) {
+    if (before) o.prog[cur] = before; else delete o.prog[cur];
+    render();
+    $('msg').innerHTML = `<div class="msg err">沒存到：${esc(e.message)}。請再按一次。</div>`;
+  }
+}
+
+load();
+setInterval(load, 60000);   // 每分鐘自動更新
+</script>
+</body>
+</html>

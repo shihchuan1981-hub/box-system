@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>每日工單小標</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<style>
+:root{--desk:#e7e3dc;--paper:#fff;--ink:#111;--ink-2:#555;--rule:#999;--faint:#d9d9d9;--accent:#c0392b;
+  --sans:'Noto Sans TC',system-ui,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace}
+*{box-sizing:border-box}
+body{background:var(--desk);color:var(--ink);font-family:var(--sans);margin:0}
+.wrap{max-width:900px;margin:0 auto;padding:16px 16px 40px;display:flex;flex-direction:column;gap:14px}
+h1{font-size:22px;margin:0;font-weight:900}
+.bar{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;font-size:15px}
+.bar input,.bar select{font:inherit;padding:6px 8px;border:1px solid var(--rule);border-radius:4px;background:#fff}
+.print{font:inherit;font-size:17px;font-weight:700;padding:10px 22px;border:none;border-radius:6px;background:var(--ink);color:#fff;cursor:pointer}
+.print:disabled{opacity:.4}
+.total{font-weight:700}
+.msg{padding:10px 14px;border-radius:4px;font-size:14px;background:#fff8e1;color:#795548;border:1px solid #ffe082}
+.msg.err{background:#fdf0ef;color:var(--accent);border-color:#ef9a9a}
+.panel{background:var(--paper);border:1px solid var(--rule);border-radius:6px;overflow-x:auto}
+.panel table{width:100%;border-collapse:collapse;font-size:15px;min-width:480px}
+.panel th,.panel td{padding:8px 12px;border-bottom:1px solid var(--faint);text-align:left}
+.panel th{font-size:12px;color:var(--ink-2)}
+.panel tr:last-child td{border-bottom:none}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--rule);border-radius:4px;overflow:hidden}
+.stepper button{font:inherit;font-size:20px;width:40px;height:36px;border:none;background:var(--desk);cursor:pointer}
+.stepper span{min-width:36px;text-align:center;font-family:var(--mono);font-weight:700}
+.tip{font-size:13px;color:var(--ink-2);line-height:1.7}
+.sheets{display:flex;flex-direction:column;gap:12px;overflow-x:auto}
+.sheet{background:var(--paper);width:210mm;height:297mm;margin:0 auto;display:grid;grid-template-columns:105mm 105mm;grid-template-rows:repeat(4,74.25mm);box-shadow:0 2px 10px rgba(0,0,0,.15);flex:none}
+.label{border:1px dashed var(--faint);padding:6mm 6mm 6mm 7mm;display:grid;grid-template-columns:1fr 26mm;column-gap:4mm;align-items:center;overflow:hidden}
+.label.blank{background:repeating-linear-gradient(135deg,transparent 0 3mm,#f3f3f3 3mm 6mm)}
+.l-text{display:flex;flex-direction:column;gap:3mm;min-width:0}
+.l-cust{font-size:7mm;font-weight:900;line-height:1.2;overflow-wrap:anywhere;border-bottom:.6mm solid var(--ink);padding-bottom:2mm}
+.l-prod{font-size:5.2mm;font-weight:500;overflow-wrap:anywhere}
+.l-size{font-family:var(--mono);font-size:5.4mm;font-weight:700;overflow-wrap:anywhere}
+.l-qty{font-size:6.4mm;font-weight:900}
+.l-qr svg{width:26mm;height:26mm;display:block}
+@media print{
+  @page{size:A4;margin:0}
+  body{background:#fff}
+  .wrap{padding:0;max-width:none;display:block}
+  .wrap > :not(.sheets){display:none!important}
+  .sheets{display:block;overflow:visible}
+  .sheet{box-shadow:none;margin:0;page-break-after:always;break-after:page}
+  .label{border:none}
+  .label.blank{background:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>每日工單小標</h1>
+  <div class="bar">
+    <label>排程日期 <input type="date" id="day"></label>
+    <label>貼紙從 <select id="startAt"></select> 開始</label>
+    <span class="total" id="total"></span>
+    <button class="print" id="printBtn" onclick="window.print()">列印小標</button>
+  </div>
+  <div id="msg"></div>
+  <div class="panel"><table>
+    <thead><tr><th>客戶</th><th>品名</th><th>尺寸</th><th>要印幾張</th></tr></thead>
+    <tbody id="pick"><tr><td colspan="4">載入中…</td></tr></tbody>
+  </table></div>
+  <p class="tip">列印時「邊界」選<b>無</b>、「縮放」選<b>100%</b>（或「實際大小」）。第一次請先用白紙印一張，疊在貼紙上對光看格子有沒有對準。</p>
+  <div class="sheets" id="sheets"></div>
+</div>
+
+<script>
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzXvT3OkQoOKZ2XmmrtFBKhxg9OuTCphL66klI1sJBeSqczxUuKhCZZKMdzzXN_AqJ3/exec';
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let orders = [], copies = {};
+
+const t = new Date(); t.setMinutes(t.getMinutes() - t.getTimezoneOffset());
+$('day').value = t.toISOString().slice(0, 10);
+$('startAt').innerHTML = [1,2,3,4,5,6,7,8].map(n => `<option value="${n}">第 ${n} 格</option>`).join('');
+$('day').onchange = load;
+$('startAt').onchange = draw;
+
+function qr(text) {
+  try { const q = qrcode(0, 'M'); q.addData(unescape(encodeURIComponent(text))); q.make();
+        return q.createSvgTag({ cellSize: 2, margin: 0, scalable: true }); }
+  catch (e) { return ''; }
+}
+
+async function load() {
+  $('pick').innerHTML = '<tr><td colspan="4">載入中…</td></tr>';
+  $('msg').innerHTML = '';
+  try {
+    const res = await fetch(GAS_URL + '?action=getBoard&date=' + $('day').value);
+    const d = await res.json();
+    if (!d.success) throw new Error(d.error || '讀取失敗');
+    orders = d.data.sort((a, b) => (b.rush - a.rush) || String(a.dueKey).localeCompare(String(b.dueKey)));
+    copies = Object.fromEntries(orders.map(o => [o.no, o.copies || 1]));
+    if (!orders.length) $('msg').innerHTML = '<div class="msg">這一天沒有排程的單。到試算表「訂單紀錄」的「排程日期」欄填上日期，就會出現在這裡。</div>';
+  } catch (e) {
+    orders = [];
+    $('msg').innerHTML = `<div class="msg err">連不到試算表：${esc(e.message)}</div>`;
+  }
+  draw();
+}
+
+function setCopies(no, d) { copies[no] = Math.max(0, Math.min(30, copies[no] + d)); draw(); }
+
+function labelHTML(o) {
+  return `<div class="label"><div class="l-text">
+    <div class="l-cust">${esc(o.cust)}</div>
+    <div class="l-prod">${esc(o.prod)}</div>
+    <div class="l-size">${esc(o.size)}</div>
+    <div class="l-qty">${esc(o.qty)}</div>
+  </div><div class="l-qr">${qr(o.no)}</div></div>`;
+}
+
+function draw() {
+  $('pick').innerHTML = orders.length ? orders.map(o => `<tr>
+    <td><b>${esc(o.cust)}</b>${o.rush ? ' <b style="color:var(--accent)">急</b>' : ''}</td><td>${esc(o.prod)}</td><td>${esc(o.size)}</td>
+    <td><div class="stepper"><button aria-label="少一張" onclick="setCopies('${esc(o.no)}',-1)">−</button><span>${copies[o.no]}</span><button aria-label="多一張" onclick="setCopies('${esc(o.no)}',1)">＋</button></div></td>
+  </tr>`).join('') : '<tr><td colspan="4" style="color:var(--ink-2)">沒有資料</td></tr>';
+
+  const start = +$('startAt').value || 1;
+  const items = [];
+  for (let i = 1; i < start; i++) items.push('<div class="label blank"></div>');
+  orders.forEach(o => { for (let i = 0; i < copies[o.no]; i++) items.push(labelHTML(o)); });
+  const n = items.length - (start - 1);
+  while (items.length % 8) items.push('<div class="label blank"></div>');
+  const pages = [];
+  for (let i = 0; i < items.length; i += 8) pages.push(`<div class="sheet">${items.slice(i, i + 8).join('')}</div>`);
+  $('sheets').innerHTML = n ? pages.join('') : '';
+  $('total').textContent = n ? `共 ${n} 張小標，${pages.length} 張 A4 貼紙` : '';
+  $('printBtn').disabled = !n;
+}
+
+load();
+</script>
+</body>
+</html>
