@@ -54,13 +54,11 @@ section h2 small{font-size:13px;color:var(--ink-2);font-weight:500}
 .dot{font-size:11px;padding:1px 5px;border-radius:3px;background:var(--chip);color:var(--ink-2)}
 .dot.doing{background:var(--warn);color:#fff}
 .dot.done{background:var(--ok);color:#fff}
-.acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-.acts button,.acts label{font:inherit;font-size:14px;font-weight:700;padding:8px 12px;border-radius:5px;border:1.5px solid var(--ink);background:var(--surface);color:var(--ink);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:4px}
+.acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;align-items:center}
+.acts button{font:inherit;font-size:14px;font-weight:700;padding:8px 12px;border-radius:5px;border:1.5px solid var(--ink);background:var(--surface);color:var(--ink);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:4px}
 .acts .go{background:var(--ink);color:#fff}
 .acts .rush-on{border-color:var(--accent);background:var(--accent);color:#fff}
 .acts .light{border-color:var(--line);color:var(--ink-2);font-weight:500}
-.acts label{position:relative;overflow:hidden}
-.acts input[type=date]{position:absolute;inset:0;opacity:0;cursor:pointer}
 .acts button:disabled{opacity:.4}
 button:focus-visible,a:focus-visible{outline:3px solid var(--warn);outline-offset:2px}
 .empty{padding:18px;text-align:center;color:var(--ink-2);background:var(--surface);border:1px dashed var(--line);border-radius:6px;font-size:14px}
@@ -85,8 +83,11 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--warn);outline-offse
 .type{font-size:12px;font-weight:700;padding:1px 7px;border-radius:3px;white-space:nowrap}
 .type.out{background:var(--ink);color:#fff}
 .type.in{background:var(--chip);color:var(--ink)}
-.idate{display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--ink-2);position:relative;border:1px solid var(--line);border-radius:4px;padding:3px 8px;cursor:pointer;white-space:nowrap}
-.idate input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.idate{font:inherit;display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--ink-2);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:3px 8px;cursor:pointer;white-space:nowrap}
+.picker{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;background:var(--warn-soft);border:1.5px solid var(--warn);border-radius:6px;padding:6px 8px}
+.picker input{font:inherit;font-size:15px;padding:5px 6px;border:1px solid var(--line);border-radius:4px;background:#fff}
+.picker button{font:inherit;font-size:14px;font-weight:700;padding:6px 12px;border-radius:5px;border:1.5px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer}
+.picker button.no{background:var(--surface);color:var(--ink-2);border-color:var(--line);font-weight:500}
 @media (max-width:720px){.row,.ohead{grid-template-columns:1fr}.acts{justify-content:flex-start}.sum{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
@@ -192,7 +193,7 @@ function card(g, where){
       const done = need.filter(o => o.prog[i] === 'done').length;
       return `<span class="${done===need.length?'all':done||need.some(o=>o.prog[i])?'part':''}">${s} ${done}/${need.length}</span>`; }).join('')}</span>`;
   const gid = where + '｜' + g.key, ids = JSON.stringify(g.items.map(o => o.no)).replace(/"/g,'&quot;');
-  const dateBtn = `<label>${where==='un'?'選日期':'改日期'}<input type="date" aria-label="選排程日期" onchange="schedGroup(${ids}, this.value)"></label>`;
+  const dateBtn = `<button onclick="pickDate(this, ${ids})">${where==='un'?'選日期':'改日期'}</button>`;
   const rushBtn = `<button class="${g.rush?'rush-on':''}" onclick="rushGroup(${ids}, ${!g.rush})">${g.rush?'急件 ✓':'急件'}</button>`;
   let acts;
   if(where === 'un') acts = `<button class="go" onclick="schedGroup(${ids}, addDays(0))">整張排今天</button><button onclick="schedGroup(${ids}, addDays(1))">排明天</button>${dateBtn}${rushBtn}<button class="light" onclick="shipGroup(${ids})">已出貨</button>`;
@@ -204,7 +205,7 @@ function card(g, where){
       <td>${esc(o.prod)}${o.kind!=='釘箱'?` <span class="pill kind">${esc(o.kind)}</span>`:''}</td>
       <td class="mono">${esc(o.size)||'－'}</td><td>${esc(o.qty)||'－'}</td><td class="mono">${esc(o.material)||'－'}</td>
       <td>${where==='un'?'':`<span class="dots">${o.route.map(i => `<span class="dot ${o.prog[i]||''}">${STATIONS[i]}</span>`).join('')}</span>`}</td>
-      <td><label class="idate">${o.sched ? label(o.sched) : '只排這項'}<input type="date" aria-label="只改這一項的日期" onchange="schedGroup(['${esc(o.no)}'], this.value)"></label></td>
+      <td><button class="idate" onclick="pickDate(this, ['${esc(o.no)}'])">${o.sched ? label(o.sched) : '只排這項'}</button></td>
     </tr>`).join('');
   return `<div class="order ${g.rush?'rush':''} ${where==='un'&&n!==null&&n<0?'late':''}">
     <div class="ohead">
@@ -231,6 +232,19 @@ async function change(nos, apply, body){
   list.forEach(apply); render();               // 畫面先變，不用等
   try{ await post(body); $('msg').innerHTML=''; }
   catch(e){ list.forEach((o,i) => Object.assign(o, before[i])); render(); $('msg').innerHTML = `<div class="msg err">沒存到：${esc(e.message)}，請再按一次。</div>`; }
+}
+// 選日期：在按鈕旁邊跳出一個看得見的日期框＋確定，電腦和手機都能用
+function pickDate(btn, nos){
+  document.querySelectorAll('.picker').forEach(p => p.remove());
+  const box = document.createElement('span');
+  box.className = 'picker';
+  box.innerHTML = `<input type="date" value="${addDays(1)}" min="${addDays(0)}" aria-label="排程日期"><button>確定</button><button class="no">取消</button>`;
+  btn.after(box);
+  const inp = box.querySelector('input');
+  box.querySelector('button').onclick = () => { if(inp.value){ box.remove(); schedGroup(nos, inp.value); } };
+  box.querySelector('.no').onclick = () => box.remove();
+  inp.focus();
+  try { inp.showPicker(); } catch(e) {}
 }
 function schedGroup(nos, date){ change(nos, o => { o.sched = date; }, {action:'setSchedule', orderIds:nos, schedDate:date}); }
 function rushGroup(nos, on){ change(nos, o => { o.rush = on; }, {action:'setSchedule', orderIds:nos, rush:on}); }
