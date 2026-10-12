@@ -27,8 +27,13 @@ h1{font-size:22px;margin:0;font-weight:900}
 .sum a{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 12px;text-decoration:none;color:var(--ink);display:flex;flex-direction:column;gap:2px}
 .sum b{font-size:26px;font-weight:900;font-variant-numeric:tabular-nums}
 .sum span{font-size:13px;color:var(--ink-2)}
-.sum .alert{border-color:var(--accent);background:var(--accent-soft)}
-.sum .alert span{color:var(--accent);font-weight:700}
+.sum .bad{border-color:var(--accent);background:var(--accent-soft)}
+.sum .bad b,.sum .bad span{color:var(--accent)}
+.sum .bad span{font-weight:700}
+.sum .good{border-color:#a5d6a7;background:var(--ok-soft)}
+.sum .good b,.sum .good span{color:var(--ok)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--ink-2);margin-top:-8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
 .msg{padding:10px 14px;border-radius:4px;font-size:14px}
 .msg.err{background:var(--accent-soft);color:var(--accent);border:1px solid #ef9a9a}
 section h2{font-size:20px;font-weight:900;margin:0 0 8px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
@@ -44,8 +49,9 @@ section h2 small{font-size:13px;color:var(--ink-2);font-weight:500}
 .l2{display:flex;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--ink-2);align-items:center}
 .l2 .mono{font-family:var(--mono);color:var(--ink);font-weight:600}
 .due{font-weight:700}
-.due.late{color:var(--accent)}
-.due.soon{color:var(--warn)}
+.due.bad{color:var(--accent)}
+.due.good{color:var(--ok)}
+.order.good{border-left:6px solid var(--ok)}
 .pill{font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;white-space:nowrap}
 .pill.rush{background:var(--accent);color:#fff}
 .pill.kind{background:var(--ink);color:#fff}
@@ -65,7 +71,8 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--warn);outline-offse
 .day{font-size:15px;font-weight:700;margin:10px 0 4px;color:var(--ink-2)}
 .order{background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:hidden}
 .order.rush{border-left:6px solid var(--accent)}
-.order.late .ohead{background:var(--accent-soft)}
+.order.bad .ohead{background:var(--accent-soft)}
+.order.bad{border-left:6px solid var(--accent)}
 .ohead{padding:10px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;align-items:center}
 .ono{font-family:var(--mono);font-size:14px;color:var(--ink-2);font-weight:600}
 .count{font-size:13px;color:var(--ink-2)}
@@ -103,8 +110,9 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--warn);outline-offse
     </div>
   </div>
   <div class="sum" id="sum"></div>
+  <div class="legend"><span><i style="background:var(--ok)"></i>綠＝已排程、趕得上交期</span><span><i style="background:var(--ink)"></i>黑＝一般</span><span><i style="background:var(--accent)"></i>紅＝要注意：過交期、3 天內要交還沒排、排的日期比交期晚</span></div>
   <div id="msg"></div>
-  <section id="sec-un"><h2>還沒排程 <small>一張卡片＝一張訂單，照交貨日排。紅色＝已過交期，橘色＝3 天內要交</small></h2><div class="list" id="un"></div></section>
+  <section id="sec-un"><h2>還沒排程 <small>一張卡片＝一張訂單，照交貨日排</small></h2><div class="list" id="un"></div></section>
   <section id="sec-today"><h2 id="h-today">今天</h2><div class="list" id="today"></div></section>
   <section id="sec-tmr"><h2 id="h-tmr">明天</h2><div class="list" id="tmr"></div></section>
   <section id="sec-later"><h2>之後</h2><div id="later"></div></section>
@@ -150,6 +158,19 @@ function groupOf(list){
              rush: items.some(o => o.rush), sched: items.map(o => o.sched).filter(Boolean).sort()[0] || '' };
   });
 }
+// 綠＝排好了且趕得上；紅＝要注意；其他＝一般
+function status(g){
+  const n = daysTo(g.dueKey);
+  if(n === null) return g.sched ? 'good' : 'normal';
+  if(n < 0) return 'bad';                                   // 已過交期
+  if(!g.sched) return n <= 3 ? 'bad' : 'normal';            // 快到期還沒排
+  return g.sched > g.dueKey ? 'bad' : 'good';               // 排的日期比交期晚
+}
+function tile(groups, href, text, isSched){
+  const bad = groups.filter(g => status(g) === 'bad').length;
+  const cls = bad ? 'bad' : (isSched && groups.length ? 'good' : '');
+  return `<a href="${href}" class="${cls}"><b>${groups.length}</b><span>${text}${bad?`・${bad} 張要注意`:''}</span></a>`;
+}
 const byDue = (a,b) => (b.rush-a.rush) || String(a.dueKey||'9').localeCompare(String(b.dueKey||'9'));
 const open = new Set();
 function toggle(id){ open.has(id) ? open.delete(id) : open.add(id); render(); }
@@ -163,15 +184,13 @@ function render(){
   const days = [...new Set(laterItems.map(o => o.sched))].sort();
   const later = days.map(d => ({ d, groups: groupOf(laterItems.filter(o => o.sched === d)).sort(byDue) }));
   const nItems = g => g.reduce((n,x) => n + x.items.length, 0);
-  const late = un.filter(g => (daysTo(g.dueKey) ?? 99) < 0).length;
-  const soon = un.filter(g => { const n = daysTo(g.dueKey); return n !== null && n >= 0 && n <= 3; }).length;
-  const laterN = later.reduce((n,x) => n + x.groups.length, 0);
+  const laterGroups = later.flatMap(x => x.groups);
 
-  $('sum').innerHTML = `
-    <a href="#sec-un" class="${late||soon?'alert':''}"><b>${un.length}</b><span>張單還沒排（${nItems(un)} 項）${late?`・${late} 張過交期`:soon?`・${soon} 張快到期`:''}</span></a>
-    <a href="#sec-today"><b>${today.length}</b><span>張單今天做（${nItems(today)} 項）</span></a>
-    <a href="#sec-tmr"><b>${tmr.length}</b><span>張單明天（${nItems(tmr)} 項）</span></a>
-    <a href="#sec-later"><b>${laterN}</b><span>張單之後（${laterItems.length} 項）</span></a>`;
+  $('sum').innerHTML =
+    tile(un, '#sec-un', `張單還沒排（${nItems(un)} 項）`, false) +
+    tile(today, '#sec-today', `張單今天做（${nItems(today)} 項）`, true) +
+    tile(tmr, '#sec-tmr', `張單明天（${nItems(tmr)} 項）`, true) +
+    tile(laterGroups, '#sec-later', `張單之後（${laterItems.length} 項）`, true);
   $('h-today').innerHTML = `今天 <small>${label(T)}</small>`;
   $('h-tmr').innerHTML = `明天 <small>${label(M)}</small>`;
 
@@ -183,7 +202,8 @@ function render(){
 
 function card(g, where){
   const n = daysTo(g.dueKey);
-  const dueCls = n === null ? '' : n < 0 ? 'late' : n <= 3 ? 'soon' : '';
+  const st = status(g), dueCls = st === 'normal' ? '' : st;
+  const lateSched = g.sched && g.dueKey && g.sched > g.dueKey && n !== null && n >= 0 ? '・排的日期比交期晚' : '';
   const dueTxt = n === null ? (g.due || '－') : n < 0 ? `${g.due}（過 ${-n} 天）` : n === 0 ? `${g.due}（今天）` : `${g.due}（${n} 天後）`;
   const nIn = g.items.filter(o => o.type === '內盒').length, nOut = g.items.length - nIn;
   const what = [nIn ? `內盒 ${nIn}` : '', nOut ? `外箱 ${nOut}` : ''].filter(Boolean).join('・');
@@ -207,12 +227,12 @@ function card(g, where){
       <td>${where==='un'?'':`<span class="dots">${o.route.map(i => `<span class="dot ${o.prog[i]||''}">${STATIONS[i]}</span>`).join('')}</span>`}</td>
       <td><button class="idate" onclick="pickDate(this, ['${esc(o.no)}'])">${o.sched ? label(o.sched) : '只排這項'}</button></td>
     </tr>`).join('');
-  return `<div class="order ${g.rush?'rush':''} ${where==='un'&&n!==null&&n<0?'late':''}">
+  return `<div class="order ${st==='bad'?'bad':st==='good'?'good':g.rush?'rush':''}">
     <div class="ohead">
       <div class="info">
         <div class="l1"><span class="cust">${esc(g.cust)}</span>${g.orderNo?`<span class="ono">單號 ${esc(g.orderNo)}</span>`:''}
           ${g.rush?'<span class="pill rush">急件</span>':''}${carry}</div>
-        <div class="l2"><span class="due ${dueCls}">交貨 ${esc(dueTxt)}</span><span class="count">${g.items.length} 項（${what}）</span>${prog}</div>
+        <div class="l2"><span class="due ${dueCls}">交貨 ${esc(dueTxt)}${lateSched}</span><span class="count">${g.items.length} 項（${what}）</span>${prog}</div>
         ${g.items.length > 1 ? `<div><button class="toggle" onclick="toggle('${esc(gid)}')">${isOpen ? '收起品項 ▴' : `看 ${g.items.length} 個品項 ▾`}</button></div>` : ''}
       </div>
       <div class="acts">${acts}</div>
