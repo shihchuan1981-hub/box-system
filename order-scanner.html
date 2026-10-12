@@ -126,7 +126,7 @@ tr:hover td{background:var(--accent-light)}
 .po-cell-value.mono{font-family:'IBM Plex Mono',monospace;font-size:13px}
 .po-mark-box{border:1.5px solid #111;border-radius:4px;margin-bottom:12px;overflow:hidden}
 .po-mark-header{background:#111;color:#fff;font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;padding:6px 12px}
-.po-mark-body{display:grid;grid-template-columns:1fr 1fr}
+.po-mark-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr))}
 .po-mark-col{padding:12px 14px;border-right:1px solid #ddd;min-height:80px}
 .po-mark-col:last-child{border-right:none}
 .po-mark-col-title{font-size:9px;font-weight:700;color:#999;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
@@ -194,11 +194,15 @@ tr:hover td{background:var(--accent-light)}
       <div class="field"><label>品名 / 型號</label><input id="f_product" placeholder="－"></div>
       <div class="field"><label>外箱數量</label><input id="f_outer_qty" placeholder="－"></div>
       <div class="field"><label>外箱尺寸（長×寬×高 台分）</label><input id="f_outer_size" class="mono" placeholder="171×129×73"></div>
-      <div class="field"><label>內箱尺寸（長×寬×高 台分）</label><input id="f_inner_size" class="mono" placeholder="125×54×67"></div>
+      <div class="field"><label>外箱用紙（空白＝自動算）</label><input id="f_outer_material" class="mono" placeholder="226×246 ×2張"></div>
+      <div class="field"><label>內盒數量</label><input id="f_inner_qty" placeholder="－"></div>
+      <div class="field"><label>內盒尺寸（長×寬×高 台分）</label><input id="f_inner_size" class="mono" placeholder="125×54×67"></div>
+      <div class="field"><label>內盒用紙（空白＝自動算）</label><input id="f_inner_material" class="mono" placeholder="122×233 ×2張"></div>
       <div class="field"><label>條碼</label><input id="f_barcode" class="mono" placeholder="－"></div>
       <div class="field"><label>Item No.</label><input id="f_item_no" class="mono" placeholder="－"></div>
       <div class="field full"><label>正嘜 Front Mark（變數用 [變數名] 標記）</label><textarea id="f_front_mark" rows="5" placeholder="－"></textarea></div>
       <div class="field full"><label>側嘜 Side Mark（變數用 [變數名] 標記）</label><textarea id="f_side_mark" rows="5" placeholder="－"></textarea></div>
+      <div class="field full"><label>內盒印刷（有填＝內盒要經過印刷站）</label><textarea id="f_inner_mark" rows="3" placeholder="－"></textarea></div>
       <div class="field full"><label>印刷 / 特殊備注</label><textarea id="f_notes" rows="3" placeholder="－"></textarea></div>
     </div>
   </div>
@@ -486,11 +490,15 @@ function editOrder(orderId) {
   document.getElementById('f_outer_qty').value = r[6]||'';
   document.getElementById('f_outer_size').value = r[4]||'';
   document.getElementById('f_inner_size').value = r[7]||'';
+  document.getElementById('f_outer_material').value = r[5]||'';
+  document.getElementById('f_inner_material').value = r[8]||'';
+  document.getElementById('f_inner_qty').value = r[9]||'';
   document.getElementById('f_barcode').value = '';
   document.getElementById('f_item_no').value = '';
   document.getElementById('f_front_mark').value = r[11]||'';
   document.getElementById('f_side_mark').value = r[12]||'';
   document.getElementById('f_notes').value = r[13]||'';
+  document.getElementById('f_inner_mark').value = '';
   document.getElementById('orderNoDisplay').textContent = orderId;
 
   resultCard.classList.add('show');
@@ -586,6 +594,9 @@ function fillForm(d){
   document.getElementById('f_outer_qty').value=d.outer_qty||'';
   document.getElementById('f_outer_size').value=d.outer_size||'';
   document.getElementById('f_inner_size').value=d.inner_size||'';
+  document.getElementById('f_inner_qty').value=d.inner_qty||'';
+  document.getElementById('f_outer_material').value=joinMaterial(d.outer_material,d.outer_sheets);
+  document.getElementById('f_inner_material').value=joinMaterial(d.inner_material,d.inner_sheets);
   document.getElementById('f_barcode').value=d.barcode||'';
   document.getElementById('f_item_no').value=d.item_no||'';
   // Only fill mark if no customer template loaded
@@ -594,6 +605,7 @@ function fillForm(d){
     document.getElementById('f_side_mark').value=d.side_mark||'';
   }
   document.getElementById('f_notes').value=d.notes||'';
+  document.getElementById('f_inner_mark').value=d.inner_mark||'';
   document.getElementById('orderNoDisplay').textContent=d.order_no||'';
 }
 
@@ -610,10 +622,14 @@ function getFormData(){
     outer_qty:document.getElementById('f_outer_qty').value,
     outer_size:document.getElementById('f_outer_size').value,
     inner_size:document.getElementById('f_inner_size').value,
+    inner_qty:document.getElementById('f_inner_qty').value,
+    outer_material:document.getElementById('f_outer_material').value.trim(),
+    inner_material:document.getElementById('f_inner_material').value.trim(),
     barcode:document.getElementById('f_barcode').value,
     item_no:document.getElementById('f_item_no').value,
     front_mark:document.getElementById('f_front_mark').value,
     side_mark:document.getElementById('f_side_mark').value,
+    inner_mark:document.getElementById('f_inner_mark').value.trim(),
     notes:document.getElementById('f_notes').value,
     saved_at:new Date().toLocaleString('zh-TW')
   };
@@ -627,25 +643,30 @@ document.getElementById('saveBtn').addEventListener('click', async()=>{
   showStatus('loading', isEdit ? '更新試算表中...' : '儲存到 Google 試算表...');
   try{
     // Calc materials
-    const outerM=calcMaterial(d.outer_size,'outer');
-    const innerM=calcMaterial(d.inner_size,'inner');
-    const r=await gasPost({
-      action:'saveOrder',
-      orderId: editingOrderId || ('O'+Date.now()),
-      date:d.saved_at,
-      customer:d.customer,
-      product:d.product,
-      outerSize:d.outer_size,
-      outerMaterial:outerM,
-      outerQty:d.outer_qty,
-      innerSize:d.inner_size,
-      innerMaterial:innerM,
-      innerQty:'',
-      delivery:d.delivery_date,
-      frontMark:d.front_mark,
-      sideMark:d.side_mark,
-      notes:d.notes,
-    });
+    const outerM=d.outer_material||calcMaterial(d.outer_size,'outer');
+    const innerM=d.inner_material||calcMaterial(d.inner_size,'inner');
+    const base={action:'saveOrder', date:d.saved_at, customer:d.customer, delivery:d.delivery_date, notes:d.notes};
+    const outerRow={...base, product:d.product, outerSize:d.outer_size, outerMaterial:outerM, outerQty:d.outer_qty,
+      innerSize:'', innerMaterial:'', innerQty:'', frontMark:d.front_mark, sideMark:d.side_mark};
+    const innerRow={...base, product:d.product, outerSize:'', outerMaterial:'', outerQty:'',
+      innerSize:d.inner_size, innerMaterial:innerM, innerQty:d.inner_qty, frontMark:d.inner_mark, sideMark:''};
+    let rows;
+    if (isEdit) {
+      // 編輯舊訂單：照原本一列更新
+      rows=[{...base, orderId:editingOrderId, product:d.product, outerSize:d.outer_size, outerMaterial:d.outer_size?outerM:'', outerQty:d.outer_qty,
+        innerSize:d.inner_size, innerMaterial:d.inner_size?innerM:'', innerQty:d.inner_qty, frontMark:d.front_mark, sideMark:d.side_mark}];
+    } else {
+      // 新訂單：外箱一列、內盒一列，看板和小標才會分開顯示
+      const id='O'+Date.now();
+      const hasOuter=!!d.outer_size.trim(), hasInner=!!d.inner_size.trim();
+      if (hasOuter && hasInner) rows=[
+        {...outerRow, orderId:id+'-1', product:d.product+' 外箱'},
+        {...innerRow, orderId:id+'-2', product:d.product+' 內盒'}];
+      else if (hasInner) rows=[{...innerRow, orderId:id}];
+      else rows=[{...outerRow, orderId:id}];
+    }
+    let r;
+    for (const row of rows) { r=await gasPost(row); if(!r.success) break; }
     if(r.success){
       if (isEdit) {
         showStatus('success','✓ 訂單已更新！');
@@ -665,6 +686,12 @@ document.getElementById('saveBtn').addEventListener('click', async()=>{
 });
 
 // ── Material Calc ──
+// AI 讀到的用紙「226×246」+ 張數「2」→「226×246 ×2張」
+function joinMaterial(m,n){
+  m=(m||'').toString().trim(); if(!m) return '';
+  n=parseInt(n,10);
+  return n>1 ? `${m} ×${n}張` : m;
+}
 function parseSize(str){
   if(!str) return null;
   const p=str.replace(/[×xX*\s]/g,'×').split('×').map(s=>parseFloat(s));
@@ -680,8 +707,8 @@ function calcMaterial(size,type){
 document.getElementById('printBtn').addEventListener('click',()=>{
   const d=getFormData();
   const now=new Date().toLocaleDateString('zh-TW');
-  const outerM=calcMaterial(d.outer_size,'outer');
-  const innerM=calcMaterial(d.inner_size,'inner');
+  const outerM=d.outer_material||calcMaterial(d.outer_size,'outer');
+  const innerM=d.inner_material||calcMaterial(d.inner_size,'inner');
   document.getElementById('printArea').innerHTML=`
   <div class="po-sheet">
     <div class="po-top">
@@ -696,12 +723,12 @@ document.getElementById('printBtn').addEventListener('click',()=>{
       <div class="po-cell span2"><div class="po-cell-label">客戶名稱</div><div class="po-cell-value big">${d.customer||'－'}</div></div>
       <div class="po-cell"><div class="po-cell-label">品名 / 型號</div><div class="po-cell-value">${d.product||'－'}</div></div>
       <div class="po-cell"><div class="po-cell-label">五層外箱（長×寬×高）</div><div class="po-cell-value mono big">${d.outer_size||'－'}</div></div>
-      <div class="po-cell"><div class="po-cell-label">外箱用料（寬×長 台分）</div><div class="po-cell-value mono big red">${outerM||'－'}</div></div>
+      <div class="po-cell"><div class="po-cell-label">外箱用紙（台分）</div><div class="po-cell-value mono big red">${outerM||'－'}</div></div>
       <div class="po-cell"><div class="po-cell-label">外箱數量</div><div class="po-cell-value big red">${d.outer_qty||'－'}</div></div>
       ${d.inner_size?`
-      <div class="po-cell"><div class="po-cell-label">三層內箱（長×寬×高）</div><div class="po-cell-value mono big">${d.inner_size}</div></div>
-      <div class="po-cell"><div class="po-cell-label">內箱用料（寬×長 台分）</div><div class="po-cell-value mono big" style="color:#b7770d">${innerM}</div></div>
-      <div class="po-cell"><div class="po-cell-label">內箱數量</div><div class="po-cell-value big">－</div></div>`:''}
+      <div class="po-cell"><div class="po-cell-label">內盒（長×寬×高）</div><div class="po-cell-value mono big">${d.inner_size}</div></div>
+      <div class="po-cell"><div class="po-cell-label">內盒用紙（台分）</div><div class="po-cell-value mono big" style="color:#b7770d">${innerM}</div></div>
+      <div class="po-cell"><div class="po-cell-label">內盒數量</div><div class="po-cell-value big">${d.inner_qty||'－'}</div></div>`:''}
       <div class="po-cell"><div class="po-cell-label">Item No.</div><div class="po-cell-value mono">${d.item_no||'－'}</div></div>
       <div class="po-cell span2"><div class="po-cell-label">條碼</div><div class="po-cell-value mono">${d.barcode||'－'}</div></div>
     </div>
@@ -710,6 +737,7 @@ document.getElementById('printBtn').addEventListener('click',()=>{
       <div class="po-mark-body">
         <div class="po-mark-col"><div class="po-mark-col-title">正嘜 Front Mark</div><div class="po-mark-text">${d.front_mark||'－'}</div></div>
         <div class="po-mark-col"><div class="po-mark-col-title">側嘜 Side Mark</div><div class="po-mark-text">${d.side_mark||'－'}</div></div>
+        ${d.inner_mark?`<div class="po-mark-col"><div class="po-mark-col-title">內盒印刷</div><div class="po-mark-text">${d.inner_mark}</div></div>`:''}
       </div>
     </div>
     ${d.notes?`<div class="po-notes-box"><div class="po-notes-label">特殊印刷要求 / 備注</div><div class="po-notes-text">${d.notes}</div></div>`:''}
@@ -726,7 +754,7 @@ document.getElementById('printBtn').addEventListener('click',()=>{
 document.getElementById('exportBtn').addEventListener('click',()=>{
   const d=getFormData();
   const headers=['客戶','訂單號','訂貨日','交貨日','品名','外箱尺寸','外箱用料','外箱數','內箱尺寸','內箱用料','條碼','Item No.','正嘜','側嘜','備注'];
-  const vals=[d.customer,d.order_no,d.order_date,d.delivery_date,d.product,d.outer_size,calcMaterial(d.outer_size,'outer'),d.outer_qty,d.inner_size,calcMaterial(d.inner_size,'inner'),d.barcode,d.item_no,d.front_mark,d.side_mark,d.notes];
+  const vals=[d.customer,d.order_no,d.order_date,d.delivery_date,d.product,d.outer_size,d.outer_material||calcMaterial(d.outer_size,'outer'),d.outer_qty,d.inner_size,d.inner_material||calcMaterial(d.inner_size,'inner'),d.barcode,d.item_no,d.front_mark,d.side_mark,d.notes];
   const csv=[headers.join(','),vals.map(v=>`"${(v||'').replace(/"/g,'""')}"`).join(',')].join('\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));
   a.download=`訂單_${d.order_no||'draft'}_${new Date().toLocaleDateString('zh-TW').replace(/\//g,'-')}.csv`; a.click();
