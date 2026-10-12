@@ -139,6 +139,26 @@ header .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11p
 .pm-new{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px}
 .field .pm-new input,.field .pm-new select{width:auto;margin:0;border:1px solid var(--border);background:#fff;padding:6px 8px;font-size:14px}
 .field .pm-new input{min-width:160px}
+.mk-thumb{width:96px;height:72px;object-fit:cover;border-radius:4px;border:1px solid var(--border);background:var(--tag-bg);cursor:zoom-in;flex:none}
+.pm-photo{display:flex;gap:10px;align-items:center;margin-top:8px;font-size:12px;color:var(--ink-light)}
+.pm-photo .mk-thumb{width:140px;height:105px}
+.ph-over{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;cursor:zoom-out}
+.ph-over img{max-width:100%;max-height:85vh;border-radius:4px}
+.ph-over span{color:#fff;font-size:14px}
+.ship-cust{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:14px;font-weight:700}
+.ship-cust input,.ship-search{font-family:inherit;font-size:16px;padding:9px 12px;border:1.5px solid var(--border);border-radius:4px;min-width:240px;flex:1}
+.ship-search{width:100%;margin-bottom:6px}
+.ship-row{border:1px solid var(--border);border-left:5px solid var(--border);border-radius:6px;padding:12px;margin-top:10px;background:#fff;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start}
+.ship-row.ok{border-left-color:var(--success)}
+.ship-row.done{border-left-color:var(--success);background:var(--success-light)}
+.ship-row.ask{border-left-color:var(--warning)}
+.ship-main{flex:1;min-width:220px}
+.ship-main b{font-size:16px}
+.ship-main .sub{font-size:13px;color:var(--ink-light);margin-top:2px}
+.ship-photos{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.cam-btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:15px;font-weight:700;padding:10px 16px;border-radius:6px;background:var(--ink);color:#fff;cursor:pointer;border:none}
+.cam-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.cam-btn.busy{opacity:.5;pointer-events:none}
 .list-search{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
 .list-search input{flex:1;min-width:200px;font-family:inherit;font-size:16px;padding:9px 12px;border:1.5px solid var(--border);border-radius:4px;outline:none}
 .list-search input:focus{border-color:var(--accent)}
@@ -215,6 +235,7 @@ tr:hover td{background:var(--accent-light)}
   <button class="nav-tab active" onclick="switchTab('scan')">📄 接單辨識</button>
   <button class="nav-tab" onclick="switchTab('customers')">👥 客戶資料庫</button>
   <button class="nav-tab" onclick="switchTab('history')">📋 訂單紀錄</button>
+  <button class="nav-tab" onclick="switchTab('photos')">📷 出貨麥頭</button>
 </div>
 
 <!-- ══ TAB: 接單辨識 ══ -->
@@ -357,6 +378,23 @@ tr:hover td{background:var(--accent-light)}
 </div>
 </div>
 
+<!-- ══ TAB: 出貨麥頭 ══ -->
+<div class="tab-panel" id="tab-photos">
+<div class="container">
+  <div class="upload-zone" id="shipZone">
+    <input type="file" id="shipFile" accept="image/*,application/pdf">
+    <div id="shipContent"><div class="upload-icon">🚚</div><h3>拍或上傳今天簽回的出貨單</h3><p>AI 讀出客戶和品項，再一筆一筆拍麥頭照片（正嘜、側嘜拍在同一張）</p></div>
+  </div>
+  <div id="shipStatus" class="status-bar" style="display:none"></div>
+  <div class="customer-form">
+    <div class="ship-cust">客戶 <input id="shipCust" list="custNames" placeholder="沒有出貨單也可以直接選客戶" autocomplete="off"><datalist id="custNames"></datalist><span id="shipInfo" style="font-weight:400;color:var(--ink-light)"></span></div>
+    <input class="ship-search" id="shipSearch" placeholder="🔍 搜尋這家客戶的產品（品名或尺寸），加到下面清單" oninput="shipSearchRender()" autocomplete="off">
+    <div id="shipSearchRes"></div>
+    <div id="shipList"><div class="empty-state">上傳出貨單，或選客戶後搜尋產品</div></div>
+  </div>
+</div>
+</div>
+
 <!-- ══ TAB: 訂單紀錄 ══ -->
 <div class="tab-panel" id="tab-history">
 <div class="container">
@@ -420,11 +458,12 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 
 // ── Tab ──
 function switchTab(tab) {
-  document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', ['scan','customers','history'][i]===tab));
+  document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', ['scan','customers','history','photos'][i]===tab));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
   if (tab==='customers') loadCustomers();
   if (tab==='history') loadOrders();
+  if (tab==='photos') openPhotos();
 }
 
 // ── GAS helpers ──
@@ -773,7 +812,8 @@ function renderPM() {
           <span>用紙 <em>${esc(p.用紙 || '－')}</em></span><span>材質 <em>${esc(p.材質 || '－')}${p.層數 ? `（${esc(p.層數)}層）` : ''}</em></span>
           ${p.紙色 ? `<span>紙色 <em>${esc(p.紙色)}</em></span>` : ''}<span>印刷 <em>${print}</em></span>
           <span>上次出貨 <em>${esc(p.最後出貨 || '－')}</em>${+p.出貨次數 ? `（${esc(p.出貨次數)} 次）` : ''}</span></div>
-        ${warns.map(w => `<div class="pm-warn">⚠ ${w}</div>`).join('')}`;
+        ${warns.map(w => `<div class="pm-warn">⚠ ${w}</div>`).join('')}
+        ${photoList(p).length ? `<div class="pm-photo">${photoImg(photoList(p)[0].id)}<span>上次麥頭 ${esc(photoList(p)[0].date)}${photoList(p).length > 1 ? `（共 ${photoList(p).length} 張）` : ''}<br>點照片放大</span></div>` : ''}`;
     } else if (st.cands.length) {
       h = `<div class="pm-head"><span class="pm-title ask">${L}：有幾個很像，請點正確的</span><button type="button" class="pm-btn" onclick="openSearch('${slot}')">都不是</button></div>${candButtons(slot, st.cands)}`;
     } else {
@@ -905,6 +945,176 @@ function rememberPrint(it, P) {
   });
 }
 ['f_front_mark', 'f_side_mark', 'f_inner_mark', 'f_notes', 'f_product'].forEach(id => $(id).addEventListener('input', () => renderPrint()));
+
+// ═══ 麥頭照片：讀取、顯示、放大 ═══
+const photoCache = {};
+const photoList = p => String((p && p.照片) || '').split('｜').filter(Boolean).map(x => { const i = x.indexOf('@'); return i < 0 ? {id:x, date:''} : {id:x.slice(0, i), date:x.slice(i + 1)}; });
+async function getPhotoURL(id) {
+  if (photoCache[id]) return photoCache[id];
+  const r = await fetch(`${GAS_URL}?action=getPhoto&id=${encodeURIComponent(id)}`);
+  const d = await r.json();
+  if (!d.success) throw new Error(d.error || '讀不到照片');
+  return (photoCache[id] = d.data);
+}
+let phSeq = 0;
+function photoImg(id, cls) {
+  const k = 'ph' + (++phSeq);
+  if (!photoCache[id]) setTimeout(() => getPhotoURL(id).then(u => { const el = $(k); if (el) el.src = u; }).catch(() => { const el = $(k); if (el) el.alt = '讀不到照片'; }));
+  return `<img id="${k}" class="${cls || 'mk-thumb'}" ${photoCache[id] ? `src="${photoCache[id]}"` : ''} alt="載入中…" onclick="showPhoto('${esc(id)}')">`;
+}
+function showPhoto(id, label) {
+  const o = document.createElement('div');
+  o.className = 'ph-over'; o.onclick = () => o.remove();
+  o.innerHTML = `<img alt="麥頭照片"><span>點一下關閉</span>`;
+  document.body.appendChild(o);
+  getPhotoURL(id).then(u => { o.querySelector('img').src = u; }).catch(e => { o.querySelector('span').textContent = '讀不到照片：' + e.message; });
+}
+// 照片壓縮：長邊 1600、JPEG 品質 0.75，一張約 200KB
+function compressImage(file, max = 1600, q = 0.75) {
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const s = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      res(c.toDataURL('image/jpeg', q));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('讀不到這張照片')); };
+    img.src = url;
+  });
+}
+
+// ═══ 出貨麥頭：讀出貨單 → 對產品 → 每筆拍一張 ═══
+let ship = {cust:null, items:[]};
+function showShip(type, msg) { const el = $('shipStatus'); el.className = 'status-bar ' + type; el.style.display = 'flex'; el.innerHTML = type === 'loading' ? `<div class="spinner"></div><span>${msg}</span>` : `<span>${msg}</span>`; }
+async function openPhotos() {
+  if (!customers.length) await loadCustomers();
+  $('custNames').innerHTML = customers.map(c => `<option value="${esc(c.name)}">`).join('');
+}
+function findCustomer(name) {
+  name = String(name || '').trim(); if (!name) return null;
+  const exact = customers.find(c => c.name === name); if (exact) return exact;
+  const r = customers.map(c => ({c, s: nameSim(name, c.name)})).sort((a, b) => b.s - a.s || recentRank(b.c) - recentRank(a.c))[0];
+  return r && r.s >= 60 ? r.c : null;
+}
+async function setShipCustomer(c) {
+  ship.cust = c;
+  $('shipCust').value = c ? c.name : '';
+  if (!c) { renderShip(); return; }
+  showShip('loading', `讀取「${esc(c.name)}」的產品資料…`);
+  try { await loadProducts(c); $('shipStatus').style.display = 'none'; }
+  catch (e) { showShip('error', '讀不到產品資料：' + esc(e.message)); return; }
+  ship.items.forEach(it => { if (!it.picked) { it.prod = null; matchShipItem(it); } });
+  renderShip(); shipSearchRender();
+}
+$('shipCust').addEventListener('change', () => {
+  const c = findCustomer($('shipCust').value);
+  if (!c) { showShip('warning', '找不到這個客戶，請從清單選'); return; }
+  if (!ship.cust || ship.cust.id !== c.id) setShipCustomer(c);
+});
+
+function matchShipItem(it) {
+  const list = prodCache[ship.cust.id] || [];
+  const slot = /內/.test(it.kind) ? 'inner' : 'outer';
+  const ranked = list.map(p => ({p, s: prodScore(p, it.product, it.size, slot)})).filter(x => x.s >= 45).sort((a, b) => b.s - a.s || byRecent(a.p, b.p));
+  const top = ranked[0];
+  if (top && top.s >= 60 && (!ranked[1] || ranked[1].s <= top.s - 15)) { it.prod = top.p; it.cands = []; }
+  else it.cands = ranked.slice(0, 4).map(x => x.p);
+}
+
+$('shipFile').addEventListener('change', () => {
+  const file = $('shipFile').files[0]; if (!file) return;
+  const rd = new FileReader();
+  rd.onload = async e => {
+    const url = e.target.result;
+    $('shipContent').innerHTML = `<img src="${url}" class="preview-img"><p style="font-size:12px;color:var(--ink-light)">${esc(file.name)}</p>`;
+    showShip('loading', '正在讀出貨單…');
+    try {
+      if (!customers.length) await loadCustomers();
+      const r = await gasPost({action:'readShipment', fileBase64:url.split(',')[1], mediaType:file.type || 'image/jpeg'});
+      if (!r.success) throw new Error(r.error || '讀取失敗');
+      const d = r.data || {};
+      ship.items = (d.items || []).filter(x => x.product || x.size).map(x => ({product:String(x.product || '').trim(), kind:String(x.kind || '').trim(), size:String(x.size || '').trim(), qty:String(x.qty || ''), prod:null, cands:[], picked:false}));
+      $('shipInfo').textContent = [d.ship_no && '出貨單 ' + d.ship_no, d.ship_date].filter(Boolean).join('・');
+      const c = findCustomer(d.customer);
+      if (!c) { ship.cust = null; $('shipCust').value = d.customer || ''; renderShip(); showShip('warning', `讀到 ${ship.items.length} 筆，但客戶「${esc(d.customer || '')}」對不到，請從清單選客戶`); return; }
+      await setShipCustomer(c);
+      showShip('success', `✓ 讀到 ${ship.items.length} 筆品項，請一筆一筆拍麥頭`);
+    } catch (err) { showShip('error', '讀取失敗：' + esc(err.message)); }
+    $('shipFile').value = '';
+  };
+  rd.readAsDataURL(file);
+});
+
+function shipSearchRender() {
+  const q = $('shipSearch').value.trim(), el = $('shipSearchRes');
+  if (!q || !ship.cust) { el.innerHTML = q && !ship.cust ? '<div class="pm-info">請先選客戶</div>' : ''; return; }
+  const nk = nameKey(q);
+  const res = (prodCache[ship.cust.id] || []).filter(p => aliasesOf(p).some(n => nameKey(n).includes(nk)) || nameKey(p.尺寸).includes(nk)).slice(0, 8);
+  el.innerHTML = res.length ? `<div class="pm-cands">${res.map(p => `<button type="button" class="pm-cand" onclick="addShipProduct('${esc(p.產品ID)}')"><b>${prodLine(p)}</b>${photoList(p).length ? '<small>📷 已有照片</small>' : ''}</button>`).join('')}</div>` : '<div class="pm-info">找不到</div>';
+}
+function addShipProduct(id) {
+  const p = (prodCache[ship.cust.id] || []).find(x => x.產品ID === id); if (!p) return;
+  ship.items.unshift({product:p.品名, kind:p.箱型, size:p.尺寸, qty:'', prod:p, cands:[], picked:true});
+  $('shipSearch').value = ''; shipSearchRender(); renderShip();
+}
+function pickShip(i, id) {
+  const p = (prodCache[ship.cust.id] || []).find(x => x.產品ID === id); if (!p) return;
+  const it = ship.items[i]; it.prod = p; it.picked = true; it.cands = [];
+  if (it.product && !aliasesOf(p).map(nameKey).includes(nameKey(it.product))) {
+    p.其他寫法 = [p.其他寫法, it.product].filter(Boolean).join('｜');
+    gasPost({action:'addAlias', productId:p.產品ID, alias:it.product}).catch(() => {});
+  }
+  renderShip();
+}
+async function newShipProduct(i, btn) {
+  const it = ship.items[i];
+  if (!sizeKey(it.size)) { alert('這筆沒有尺寸，請用上面的搜尋找產品'); return; }
+  const kind = it.kind || '外箱', layer = kind === '內箱' ? 3 : 5;
+  btn.disabled = true; btn.textContent = '存檔中…';
+  try {
+    const r = await gasPost({action:'saveProduct', product:{'客戶ID':ship.cust.id, '客戶名稱':ship.cust.name, '品名':it.product, '箱型':kind,
+      '尺寸':sizeKey(it.size).split('x').join('×'), '用紙':calcMat(it.size, kind, layer), '層數':String(layer), '紙色':/W$/i.test(it.product) ? '白' : '', '備註':'出貨麥頭新增'}});
+    if (!r.success) throw new Error(r.error);
+    (prodCache[ship.cust.id] = prodCache[ship.cust.id] || []).unshift(r.data);
+    it.prod = r.data; it.picked = true; it.cands = []; renderShip();
+  } catch (e) { alert('存檔失敗：' + e.message); btn.disabled = false; btn.textContent = '存成新產品'; }
+}
+async function uploadShipPhoto(i, input) {
+  const it = ship.items[i], file = input.files[0]; if (!file || !it.prod) return;
+  const lbl = input.parentElement; lbl.classList.add('busy'); lbl.firstChild.textContent = '上傳中… ';
+  try {
+    const img = await compressImage(file);
+    const r = await gasPost({action:'uploadPhoto', productId:it.prod.產品ID, image:img});
+    if (!r.success) throw new Error(r.error);
+    it.prod.照片 = r.data.photo;
+    if (!it.prod.印刷) it.prod.印刷 = '有印';
+    photoCache[photoList(it.prod)[0].id] = img;
+    it.done = true;
+    const left = ship.items.filter(x => !x.done).length;
+    showShip('success', left ? `✓ 已存「${esc(it.prod.品名)}」的麥頭，還有 ${left} 筆` : '✓ 這張出貨單的麥頭都拍好了');
+  } catch (e) { showShip('error', '上傳失敗：' + esc(e.message) + '（雲端空間滿了也會失敗）'); }
+  renderShip();
+}
+function renderShip() {
+  const el = $('shipList');
+  if (!ship.items.length) { el.innerHTML = '<div class="empty-state">上傳出貨單，或選客戶後搜尋產品</div>'; return; }
+  el.innerHTML = ship.items.map((it, i) => {
+    const p = it.prod, ph = photoList(p);
+    const head = `<b>${esc(it.product || '（沒有品名）')}</b><div class="sub">${esc([it.kind, it.size, it.qty && '數量 ' + it.qty].filter(Boolean).join('・'))}</div>`;
+    let body;
+    if (!ship.cust) body = '<div class="pm-info">請先選客戶</div>';
+    else if (p) body = `<div class="pm-info">✓ 產品：<b style="font-size:14px">${esc(p.品名)}</b><span>${esc([p.箱型, p.尺寸].filter(Boolean).join('・'))}</span>
+        <span>${ph.length ? `已有 ${ph.length} 張，最新 ${esc(ph[0].date)}` : '還沒有麥頭照片'}</span></div>`;
+    else if (it.cands.length) body = `<div class="pm-title ask" style="margin-top:6px">請點正確的產品：</div>${candButtons('x', it.cands).replace(/pickProduct\('x',/g, `pickShip(${i},`)}`;
+    else body = `<div class="pm-info">產品資料裡找不到</div><button type="button" class="pm-btn go" style="margin-top:6px" onclick="newShipProduct(${i}, this)">存成新產品</button>`;
+    const photos = p ? `<div class="ship-photos">${ph.slice(0, 2).map(x => photoImg(x.id)).join('')}
+        <label class="cam-btn">${it.done ? '再拍一張 ' : '📷 拍麥頭 '}<input type="file" accept="image/*" capture="environment" onchange="uploadShipPhoto(${i}, this)"></label></div>` : '';
+    return `<div class="ship-row ${it.done ? 'done' : p ? 'ok' : it.cands.length ? 'ask' : ''}"><div class="ship-main">${head}${body}</div>${photos}</div>`;
+  }).join('');
+}
 
 // ── Customer DB ──
 async function loadCustomers() {
@@ -1514,6 +1724,8 @@ $('printBtn').addEventListener('click',()=>{
         ${d.inner_mark?`<div class="po-mark-col"><div class="po-mark-col-title">內盒印刷</div><div class="po-mark-text">${esc(d.inner_mark)}</div></div>`:''}
       </div>
     </div>
+    ${['outer','inner'].map(sl=>{ const p=pm[sl]&&pm[sl].prod, ph=photoList(p)[0]; return ph&&photoCache[ph.id]
+      ? `<div class="po-mark-box"><div class="po-mark-header">▌ 上次麥頭照片（${sl==='outer'?'外箱':'內盒'}・${esc(ph.date)}）</div><img src="${photoCache[ph.id]}" style="display:block;max-width:100%;max-height:80mm;margin:8px auto"></div>` : ''; }).join('')}
     ${d.notes?`<div class="po-notes-box"><div class="po-notes-label">特殊印刷要求 / 備注</div><div class="po-notes-text">${esc(d.notes)}</div></div>`:''}
     <div class="po-sign">
       <div class="po-sign-box">接單確認</div>

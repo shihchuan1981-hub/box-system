@@ -62,6 +62,14 @@ function doPost(e) {
       return ok(saveProduct(data.product));
     }
 
+    if (action === 'readShipment') {
+      return ok(readShipment(data.fileBase64, data.mediaType));
+    }
+
+    if (action === 'uploadPhoto') {
+      return ok(uploadPhoto(data.productId, data.image));
+    }
+
     if (action === 'setProductPrint') {
       return ok(setProductPrint(data.productId, data.print));
     }
@@ -258,6 +266,91 @@ function touchProduct(id) {
   if (nc) sh.getRange(rowNo, nc).setValue((Number(sh.getRange(rowNo, nc).getValue()) || 0) + 1);
 }
 
+// ═══ 出貨麥頭照片 ═══
+// 照片存在雲端硬碟「麥頭照片」資料夾，產品資料「照片」欄記「檔案ID@日期」，新的在前面，用｜隔開
+// 第一次使用：在編輯器選 authorizeDrive → 執行 → 允許存取雲端硬碟
+function authorizeDrive() {
+  photoFolder();
+  try { SpreadsheetApp.getUi().alert('雲端硬碟已授權，麥頭照片資料夾已建立。'); } catch (e) {}
+}
+function photoFolder() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('PHOTO_FOLDER_ID');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) {} }
+  const it = DriveApp.getFoldersByName('麥頭照片');
+  const folder = it.hasNext() ? it.next() : DriveApp.createFolder('麥頭照片');
+  props.setProperty('PHOTO_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+function uploadPhoto(productId, image) {
+  const m = String(image || '').match(/^data:(image\/\w+);base64,(.+)$/);
+  if (!m) throw new Error('照片格式不對');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sh = prodSheet();
+    const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+    const rowNo = findProductRow(sh, productId);
+    if (rowNo < 0) throw new Error('找不到產品：' + productId);
+    const row = sh.getRange(rowNo, 1, 1, h.length).getValues()[0];
+    const today = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/M/d');
+    const name = [row[h.indexOf('客戶名稱')], row[h.indexOf('品名')], today.replace(/\//g, '-')].join('_').replace(/[\\/:*?"<>|]/g, '-') + '.jpg';
+    const file = photoFolder().createFile(Utilities.newBlob(Utilities.base64Decode(m[2]), m[1], name));
+    const pc = h.indexOf('照片') + 1, ic = h.indexOf('印刷') + 1;
+    const cur = String(row[pc - 1] || '');
+    const val = [file.getId() + '@' + today].concat(cur ? cur.split('｜') : []).join('｜');
+    sh.getRange(rowNo, pc).setNumberFormat('@').setValue(val);
+    if (ic && !String(row[ic - 1] || '').trim()) sh.getRange(rowNo, ic).setValue('有印');   // 有麥頭照片＝有印
+    return {photo: val};
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 只給「麥頭照片」資料夾裡的檔案，其他雲端硬碟檔案一律不給
+function getPhoto(id) {
+  const file = DriveApp.getFileById(id);
+  const folderId = photoFolder().getId();
+  const parents = file.getParents();
+  let inFolder = false;
+  while (parents.hasNext()) if (parents.next().getId() === folderId) inFolder = true;
+  if (!inFolder) throw new Error('不是麥頭照片');
+  const blob = file.getBlob();
+  return 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
+}
+
+// 讀出貨單（舊系統印的）：客戶、出貨單號、日期、每個品項
+function readShipment(fileBase64, mediaType) {
+  const apiKey = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
+  if (!apiKey) throw new Error('尚未設定 ANTHROPIC_API_KEY');
+  const mt = mediaType === 'application/pdf' ? 'application/pdf' : (mediaType || 'image/jpeg');
+  const prompt =
+    '這是紙箱工廠的出貨單（照片可能是橫的或倒的）。請讀出：客戶名稱、出貨單號、出貨日期，以及表格每一列品項。\n' +
+    '日期是民國年（例如 115/09/29），請換成西元 2026/9/29。\n' +
+    '每一列：品名照抄（例如 638*12、HS330*12、A4232A*2），種類照抄（外箱、內箱、AB式…），規格照抄長*寬*高寫成「長×寬×高」，數量是數字。單價、小計不用。\n' +
+    '手寫的勾、簽名不要理。看不清楚填空字串。\n' +
+    '只回傳 JSON，不要說明：{"customer":"","ship_no":"","ship_date":"","items":[{"product":"","kind":"","size":"","qty":""}]}';
+  const payload = {
+    model: 'claude-opus-4-8',
+    max_tokens: 4000,
+    messages: [{role: 'user', content: [
+      {type: mt === 'application/pdf' ? 'document' : 'image', source: {type: 'base64', media_type: mt, data: fileBase64}},
+      {type: 'text', text: prompt}
+    ]}]
+  };
+  const res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+    method: 'post', contentType: 'application/json',
+    headers: {'x-api-key': apiKey, 'anthropic-version': '2023-06-01'},
+    payload: JSON.stringify(payload), muteHttpExceptions: true
+  });
+  const json = JSON.parse(res.getContentText());
+  if (json.error) throw new Error(json.error.message || 'Claude API 呼叫失敗');
+  const text = (json.content || []).map(c => c.text || '').join('');
+  try { return JSON.parse(text.replace(/```json|```/g, '').trim()); }
+  catch (e) { throw new Error('AI 回傳格式無法解析：' + text); }
+}
+
 // ── AI 辨識：伺服器端呼叫 Claude API，金鑰不暴露給瀏覽器 ──
 function analyzeOrder(fileBase64, mediaType) {
   const apiKey = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
@@ -346,6 +439,10 @@ function doGet(e) {
   }
   if (action === 'getSchedule') {
     try { return ok(getSchedule()); }
+    catch (err) { return ContentService.createTextOutput(JSON.stringify({success:false, error:err.message})).setMimeType(ContentService.MimeType.JSON); }
+  }
+  if (action === 'getPhoto') {
+    try { return ok(getPhoto(e.parameter.id)); }
     catch (err) { return ContentService.createTextOutput(JSON.stringify({success:false, error:err.message})).setMimeType(ContentService.MimeType.JSON); }
   }
   if (action === 'getProducts') {
