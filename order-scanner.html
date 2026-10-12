@@ -549,7 +549,7 @@ async function analyze(){
   showStatus('loading','正在辨識訂單內容...');
   try {
     const mt=fileType==='application/pdf'?'application/pdf':(fileType||'image/jpeg');
-    const r=await gasPost({action:'analyzeOrder', fileBase64, mediaType:mt});
+    const [r]=await Promise.all([gasPost({action:'analyzeOrder', fileBase64, mediaType:mt}), customers.length?null:loadCustomers()]);
     if(!r.success) throw new Error(r.error||'辨識失敗');
     recognizedItems=Array.isArray(r.data)?r.data:[r.data];
     editingOrderId=null;
@@ -579,7 +579,8 @@ function nextItem(){ if(recognizedIndex<recognizedItems.length-1) showRecognized
 
 function autoMatchCustomer(name){
   if(!name||!customers.length) return;
-  const match=customers.find(c=>name.includes(c.name.slice(0,4))||c.name.includes(name.slice(0,4)));
+  const match=customers.find(c=>name.includes(c.name.slice(0,4))||c.name.includes(name.slice(0,4)))
+    || customers.find(c=>c.name && name.replace(/\s/g,'').includes(c.name.replace(/\s/g,'').slice(0,2)));
   if(match){
     document.getElementById('f_customer_sel').value=match.id;
     onCustomerSelect();
@@ -588,8 +589,9 @@ function autoMatchCustomer(name){
 
 function fillForm(d){
   document.getElementById('f_order_no').value=d.order_no||'';
-  document.getElementById('f_order_date').value=d.order_date||'';
-  document.getElementById('f_delivery_date').value=d.delivery_date||'';
+  const od=normDate(d.order_date);
+  document.getElementById('f_order_date').value=od;
+  document.getElementById('f_delivery_date').value=normDate(d.delivery_date, od);
   document.getElementById('f_product').value=d.product||'';
   document.getElementById('f_outer_qty').value=d.outer_qty||'';
   document.getElementById('f_outer_size').value=d.outer_size||'';
@@ -684,6 +686,17 @@ document.getElementById('saveBtn').addEventListener('click', async()=>{
     } else showStatus('error','儲存失敗：'+r.error);
   }catch(e){showStatus('error','儲存失敗：'+e.message);}
 });
+
+// ── 日期補年份：「9/29」→「2026/9/29」；交貨月份比訂貨小就算隔年 ──
+function normDate(v, ref){
+  v=(v||'').toString().trim(); if(!v) return '';
+  if(/^\d{4}[\/.-]/.test(v)) return v.replace(/[.-]/g,'/');
+  const m=v.match(/^(\d{1,2})[\/.-](\d{1,2})$/); if(!m) return v;
+  let y=new Date().getFullYear();
+  const r=(ref||'').match(/^(\d{4})\/(\d{1,2})\//);
+  if(r){ y=+r[1]; if(+m[1]<+r[2]) y++; }
+  return `${y}/${+m[1]}/${+m[2]}`;
+}
 
 // ── Material Calc ──
 // AI 讀到的用紙「226×246」+ 張數「2」→「226×246 ×2張」
