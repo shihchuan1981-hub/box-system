@@ -144,10 +144,16 @@ function analyzeOrder(fileBase64, mediaType) {
     '2. 用紙：尺寸下方常有一個框寫「A X B X N」（例如 122 X 233 X 2），這不是尺寸，是用紙尺寸 A×B，N 是一個箱子要用幾張紙。放到 material（寫成 A×B）和 sheets（寫數字 N）。沒有就填空字串。\n' +
     '3. 外箱和內盒（內箱）是兩個不同的紙箱，各自有尺寸、數量、用紙，不要混在一起。「外箱數量」放 outer_qty，「內盒數量」放 inner_qty。\n' +
     '   注意：表格裡標題寫「內盒數量」的那一欄才是 inner_qty（例如 300）。「內盒印刷」底下的 QTY 是每個內盒裝幾個產品（例如 10），不是 inner_qty，要寫進 inner_mark。外箱側嘜底下的 QTY 也不是外箱數量。\n' +
-    '4. 日期常常是手寫的（訂單號碼、訂貨日期、交貨日期旁邊），請仔細讀手寫字。日期寫成 ' + year + '/月/日；交貨月份比訂貨月份小代表是隔年。日期一定要含年份。\n' +
+    '   有些訂單的內盒和外箱是「上下兩張分開的表格」，每一列是一個品項，內盒和外箱的列數、ITEM NO 不一定對得上。\n' +
+    '   這種訂單請「每一列各輸出一個物件」，不要合併、不要漏：內盒表的列只填 inner_* 和 inner_mark（outer_* 全部留空），外箱表的列只填 outer_*、front_mark、side_mark（inner_* 全部留空），product 填那一列的 ITEM NO。例如內盒 6 列、外箱 8 列就輸出 14 個物件。\n' +
+    '   合併儲存格：一個尺寸格往下跨好幾列時，跨到的每一列都用同一個尺寸；表格右邊手寫的用紙（例如「=212×291×2」）也套用到它旁邊那個尺寸跨到的每一列。\n' +
+    '   外箱表的「訂單數量」那一欄是 outer_qty。同一列的 ITEM NO、QTY、N.W.、G.W.、CUFT 要填進那一列的 side_mark，例如「ITEM NO : 54925\\nQ\'TY : 10 EA\\nN.W. : 9.0 KGS\\nG.W. : 9.8 KGS\\nCUFT : 1.9」（單位照訂單側嘜區塊寫的 EA、PCS、KGS）。\n' +
+    '   內盒表同一列的 ITEM NO、QTY 填進 inner_mark，例如「ITEM NO : 54332\\nQ\'TY : 10 EA」。「內盒數量」那格寫的是文字（例如「白色底有刀模」）時，inner_qty 留空，文字放 notes。\n' +
+    '   表格最下面沒有 ITEM NO、但有數量和尺寸的列（例如「80」「(37+8)=45X168 三層隔板」）也要輸出一個物件：product 寫「三層隔板」這類說明，inner_qty 填數量，inner_material 填 45×168，inner_size 留空，notes 寫原文。\n' +
+    '4. 日期常常是手寫的（訂單號碼、訂貨日期、交貨日期旁邊），請仔細讀手寫字。日期寫成 ' + year + '/月/日；交貨月份比訂貨月份小代表是隔年。日期一定要含年份。民國年（例如 115.10.27）要換成西元（115+1911=2026）。\n' +
     '   交貨日期通常在訂貨日期之後幾週到兩個月，手寫的「11」很容易看成「1」，請用這點判斷。\n' +
     '5. 品名照表格最左邊那格完整抄下來（含英文、數字、引號和中文，例如 3207I-L 15" 彩盒）。\n' +
-    '6. 麥頭：正嘜、側嘜照原本換行抄，每行之間用 \\n。空白沒填的變數（例如 Q\'TY:、N.W.:）照樣保留標題。\n' +
+    '6. 麥頭：正嘜、側嘜照原本換行抄，每行之間用 \\n。側嘜表格裡有填數字的，要把數字填進對應的標題後面（不要放到 notes）；沒填的變數（例如 Q\'TY:、N.W.:）照樣保留標題。正嘜是圖案 LOGO 時，寫出 LOGO 上的文字。\n' +
     '7. 內盒印刷：訂單上有「內盒印刷」（表格欄位或下方區塊）就代表內盒要印刷，把內容寫進 inner_mark，例如「ITEM NO : LNL65107\\nQ\'TY : 10 PCS」（表格裡的值要填進去）。沒有內盒印刷就填空字串。\n' +
     '8. 看不清楚的欄位填空字串，不要猜。\n' +
     '只回傳 JSON 陣列，不要任何說明文字或 markdown：\n' +
@@ -160,7 +166,7 @@ function analyzeOrder(fileBase64, mediaType) {
 
   const payload = {
     model: 'claude-opus-4-8',
-    max_tokens: 3000,
+    max_tokens: 12000,
     messages: [{
       role: 'user',
       content: [
@@ -332,7 +338,7 @@ function getBoard(date) {
 
 // 一列試算表 → 看板用的訂單資料
 function buildOrder(r, b, sched) {
-    const isInner = !r[4] && !!r[7];
+    const isInner = !r[4] && !!(r[7] || r[8] || r[9]);
     const size = String(r[4] || r[7] || '');
     const qty = String(r[6] || r[9] || '');
     const kind = String(b[4] || '釘箱').trim();

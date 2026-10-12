@@ -82,7 +82,13 @@ header .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11p
 .mark-loaded{background:var(--warning-light);border:1px solid #f6cc7a;border-radius:4px;padding:8px 12px;font-size:12px;color:var(--warning);margin-bottom:12px;display:none}
 .mark-loaded.show{display:flex;align-items:center;gap:8px}
 .multi-nav{background:var(--tag-bg);border:1px solid var(--border);border-radius:4px;padding:8px 12px;font-size:12px;color:var(--ink);margin-bottom:12px;display:none;align-items:center;justify-content:space-between}
-.multi-nav.show{display:flex}
+.multi-nav.show{display:flex;flex-wrap:wrap;gap:8px}
+.multi-nav > span:last-child{display:flex;gap:6px;flex-wrap:wrap}
+.item-chips{display:flex;flex-wrap:wrap;gap:4px;width:100%}
+.item-chip{font-size:11px;padding:2px 7px;border-radius:3px;border:1px solid var(--border);background:#fff;cursor:pointer;font-family:inherit}
+.item-chip.cur{border-color:var(--ink);font-weight:700}
+.item-chip.saved{background:var(--success-light);color:var(--success);border-color:#a5d6a7}
+.item-chip.skip{text-decoration:line-through;color:var(--ink-light)}
 /* 客戶搜尋框 */
 .cust-pick{position:relative}
 .field .cust-pick input{font-size:16px;font-weight:700;border:1.5px solid var(--border);background:#fff;padding:9px 40px 9px 12px;margin:0;border-radius:4px}
@@ -205,9 +211,12 @@ tr:hover td{background:var(--accent-light)}
   <div class="mark-loaded" id="markLoaded">📋 <span id="markLoadedText"></span></div>
   <div class="multi-nav" id="multiNav">
     <span id="multiNavText"></span>
+    <div class="item-chips" id="itemChips"></div>
     <span>
       <button class="btn btn-secondary" style="padding:3px 10px;font-size:11px" onclick="prevItem()">‹ 上一筆</button>
       <button class="btn btn-secondary" style="padding:3px 10px;font-size:11px" onclick="nextItem()">下一筆 ›</button>
+      <button class="btn btn-secondary" style="padding:3px 10px;font-size:11px" onclick="skipItem()">✕ 這筆不要</button>
+      <button class="btn btn-success" id="saveAllBtn" style="padding:3px 12px;font-size:12px" onclick="saveAll()">☁ 全部一起存</button>
     </span>
   </div>
 
@@ -844,12 +853,44 @@ function showRecognizedItem(idx){
   if(recognizedItems.length>1){
     nav.classList.add('show');
     $('multiNavText').textContent=`辨識到 ${recognizedItems.length} 筆品項，目前顯示第 ${idx+1}/${recognizedItems.length} 筆`;
+    renderChips();
   } else {
     nav.classList.remove('show');
   }
 }
-function prevItem(){ if(recognizedIndex>0) showRecognizedItem(recognizedIndex-1); }
-function nextItem(){ if(recognizedIndex<recognizedItems.length-1) showRecognizedItem(recognizedIndex+1); }
+function prevItem(){ if(recognizedIndex>0){ formToItem(); showRecognizedItem(recognizedIndex-1); } }
+function nextItem(){ if(recognizedIndex<recognizedItems.length-1){ formToItem(); showRecognizedItem(recognizedIndex+1); } }
+function goItem(i){ formToItem(); showRecognizedItem(i); }
+
+// 畫面上改過的欄位記回這一筆，換筆或「全部一起存」時才不會不見
+function formToItem(){
+  const it=recognizedItems[recognizedIndex]; if(!it || editingOrderId) return;
+  Object.assign(it,{
+    order_no:$('f_order_no').value, order_date:$('f_order_date').value, delivery_date:$('f_delivery_date').value,
+    product:$('f_product').value, outer_qty:$('f_outer_qty').value, outer_size:$('f_outer_size').value,
+    inner_size:$('f_inner_size').value, inner_qty:$('f_inner_qty').value,
+    outer_material:$('f_outer_material').value, outer_sheets:'', inner_material:$('f_inner_material').value, inner_sheets:'',
+    barcode:$('f_barcode').value, item_no:$('f_item_no').value,
+    front_mark:$('f_front_mark').value, side_mark:$('f_side_mark').value,
+    inner_mark:$('f_inner_mark').value, notes:$('f_notes').value
+  });
+}
+function itemLabel(it){
+  const type = it.outer_size && it.inner_size ? '外+內' : it.inner_size ? '內盒' : '外箱';
+  return `${type} ${it.product||it.item_no||'?'}`;
+}
+function renderChips(){
+  $('itemChips').innerHTML = recognizedItems.length>1 ? recognizedItems.map((it,i)=>
+    `<button class="item-chip ${i===recognizedIndex?'cur':''} ${it._saved?'saved':''} ${it._skip?'skip':''}" onclick="goItem(${i})">${i+1}. ${itemLabel(it).replace(/</g,'&lt;')}${it._saved?' ✓':''}</button>`).join('') : '';
+  const left = recognizedItems.filter(it=>!it._saved && !it._skip).length;
+  $('saveAllBtn').textContent = left ? `☁ 剩下 ${left} 筆一起存` : '✓ 都存好了';
+  $('saveAllBtn').disabled = !left;
+}
+function skipItem(){
+  const it=recognizedItems[recognizedIndex]; if(!it || it._saved) return;
+  it._skip=!it._skip; renderChips();
+  showStatus('success', it._skip ? `第 ${recognizedIndex+1} 筆標成「不要」，全部一起存時會跳過（再按一次可取消）` : `第 ${recognizedIndex+1} 筆恢復`);
+}
 
 function fillForm(d){
   $('f_order_no').value=d.order_no||'';
@@ -903,61 +944,98 @@ function getFormData(){
 }
 
 // ── Save Order ──
+// 一筆品項 → 要寫進試算表的列（外箱、內盒都有就拆兩列）
+function buildRows(d, id){
+  const outerM=d.outer_material||calcMaterial(d.outer_size,'outer');
+  const innerM=d.inner_material||calcMaterial(d.inner_size,'inner');
+  const sch=getSchedChoice();
+  const base={action:'saveOrder', date:d.saved_at, customer:d.customer, delivery:d.delivery_date, notes:d.notes,
+    schedDate:sch.date, rush:sch.date!==undefined||sch.rush?sch.rush:undefined};
+  const outerRow={...base, product:d.product, outerSize:d.outer_size, outerMaterial:outerM, outerQty:d.outer_qty,
+    innerSize:'', innerMaterial:'', innerQty:'', frontMark:d.front_mark, sideMark:d.side_mark};
+  const innerRow={...base, product:d.product, outerSize:'', outerMaterial:'', outerQty:'',
+    innerSize:d.inner_size, innerMaterial:innerM, innerQty:d.inner_qty, frontMark:d.inner_mark, sideMark:''};
+  if (editingOrderId) {
+    // 編輯舊訂單：照原本一列更新
+    return [{...base, orderId:editingOrderId, product:d.product, outerSize:d.outer_size, outerMaterial:d.outer_size?outerM:'', outerQty:d.outer_qty,
+      innerSize:d.inner_size, innerMaterial:d.inner_size?innerM:'', innerQty:d.inner_qty, frontMark:d.front_mark, sideMark:d.side_mark}];
+  }
+  const hasOuter=!!d.outer_size.trim();
+  // 隔板這類沒有尺寸、只有用紙和數量的內盒品項，也算內盒
+  const hasInner=!!d.inner_size.trim() || (!hasOuter && !!(d.inner_material||d.inner_qty));
+  if (hasOuter && hasInner) return [
+    {...outerRow, orderId:id+'-1', product:d.product+' 外箱'},
+    {...innerRow, orderId:id+'-2', product:d.product+' 內盒'}];
+  if (hasInner) return [{...innerRow, orderId:id}];
+  return [{...outerRow, orderId:id}];
+}
+async function postRows(rows){
+  let r;
+  for (const row of rows) { r=await gasPost(row); if(!r.success) throw new Error(r.error||'儲存失敗'); }
+}
+function markRecent(name){
+  const n = Object.keys(recent).length + 1;
+  recent[name] = {last: Math.max(n, ...Object.values(recent).map(o=>o.last+1)), count: ((recent[name]||{}).count||0)+1};
+}
+function needCustomer(d){
+  if(d.customer) return false;
+  alert('請先選客戶：在「客戶名稱」打字搜尋，然後點清單裡的那一家。\n新客戶請先到「客戶資料庫」新增。');
+  $('f_customer_q').scrollIntoView({block:'center'}); $('f_customer_q').focus(); return true;
+}
+
 $('saveBtn').addEventListener('click', async()=>{
   const d=getFormData();
-  if(!d.customer){
-    alert('請先選客戶：在「客戶名稱」打字搜尋，然後點清單裡的那一家。\n新客戶請先到「客戶資料庫」新增。');
-    $('f_customer_q').scrollIntoView({block:'center'}); $('f_customer_q').focus(); return;
-  }
+  if(needCustomer(d)) return;
   const isEdit = !!editingOrderId;
   showStatus('loading', isEdit ? '更新試算表中...' : '儲存到 Google 試算表...');
   try{
-    const outerM=d.outer_material||calcMaterial(d.outer_size,'outer');
-    const innerM=d.inner_material||calcMaterial(d.inner_size,'inner');
-    const sch=getSchedChoice();
-    const base={action:'saveOrder', date:d.saved_at, customer:d.customer, delivery:d.delivery_date, notes:d.notes,
-      schedDate:sch.date, rush:sch.date!==undefined||sch.rush?sch.rush:undefined};
-    const outerRow={...base, product:d.product, outerSize:d.outer_size, outerMaterial:outerM, outerQty:d.outer_qty,
-      innerSize:'', innerMaterial:'', innerQty:'', frontMark:d.front_mark, sideMark:d.side_mark};
-    const innerRow={...base, product:d.product, outerSize:'', outerMaterial:'', outerQty:'',
-      innerSize:d.inner_size, innerMaterial:innerM, innerQty:d.inner_qty, frontMark:d.inner_mark, sideMark:''};
-    let rows;
+    await postRows(buildRows(d, 'O'+Date.now()));
+    markRecent(d.customer);
     if (isEdit) {
-      // 編輯舊訂單：照原本一列更新
-      rows=[{...base, orderId:editingOrderId, product:d.product, outerSize:d.outer_size, outerMaterial:d.outer_size?outerM:'', outerQty:d.outer_qty,
-        innerSize:d.inner_size, innerMaterial:d.inner_size?innerM:'', innerQty:d.inner_qty, frontMark:d.front_mark, sideMark:d.side_mark}];
-    } else {
-      // 新訂單：外箱一列、內盒一列，看板和小標才會分開顯示
-      const id='O'+Date.now();
-      const hasOuter=!!d.outer_size.trim(), hasInner=!!d.inner_size.trim();
-      if (hasOuter && hasInner) rows=[
-        {...outerRow, orderId:id+'-1', product:d.product+' 外箱'},
-        {...innerRow, orderId:id+'-2', product:d.product+' 內盒'}];
-      else if (hasInner) rows=[{...innerRow, orderId:id}];
-      else rows=[{...outerRow, orderId:id}];
+      showStatus('success','✓ 訂單已更新！');
+      editingOrderId=null;
+      $('saveBtn').innerHTML='☁ 儲存到試算表';
+      return;
     }
-    let r;
-    for (const row of rows) { r=await gasPost(row); if(!r.success) break; }
-    if(r.success){
-      // 這家變成「最近下單」，下次打開選單就排在最前面
-      const n = Object.keys(recent).length + 1;
-      recent[d.customer] = {last: Math.max(n, ...Object.values(recent).map(o=>o.last+1)), count: ((recent[d.customer]||{}).count||0)+1};
-      if (isEdit) {
-        showStatus('success','✓ 訂單已更新！');
-        editingOrderId=null;
-        $('saveBtn').innerHTML='☁ 儲存到試算表';
-      } else {
-        const savedNo=recognizedIndex+1, total=recognizedItems.length;
-        if (total>1 && recognizedIndex<total-1) {
-          showRecognizedItem(recognizedIndex+1);
-          showStatus('success', `✓ 第 ${savedNo}/${total} 筆已儲存，已切換到下一筆，請確認後再儲存`);
-        } else {
-          showStatus('success', total>1 ? `✓ 全部 ${total} 筆品項已儲存完畢！` : '✓ 訂單已儲存到 Google 試算表！');
-        }
-      }
-    } else showStatus('error','儲存失敗：'+r.error);
+    const it=recognizedItems[recognizedIndex]; if(it){ formToItem(); it._saved=true; it._skip=false; }
+    const total=recognizedItems.length;
+    const nextIdx=recognizedItems.findIndex((x,i)=>i>recognizedIndex && !x._saved && !x._skip);
+    if (total>1 && nextIdx>=0) {
+      showRecognizedItem(nextIdx);
+      showStatus('success', `✓ 第 ${recognizedItems.indexOf(it)+1} 筆已儲存，已切換到第 ${nextIdx+1} 筆`);
+    } else {
+      if (total>1) renderChips();
+      showStatus('success', total>1 ? `✓ 這筆已儲存，${recognizedItems.filter(x=>x._saved).length}/${total} 筆存好了` : '✓ 訂單已儲存到 Google 試算表！');
+    }
   }catch(e){showStatus('error','儲存失敗：'+e.message);}
 });
+
+// 多筆品項一次全部存（跳過已存、標「不要」的）
+async function saveAll(){
+  formToItem();
+  const d0=getFormData();
+  if(needCustomer(d0)) return;
+  const todo=recognizedItems.map((it,i)=>i).filter(i=>!recognizedItems[i]._saved && !recognizedItems[i]._skip);
+  if(!todo.length) return;
+  $('saveAllBtn').disabled=true;
+  const ts=Date.now(); let done=0;
+  try{
+    for (const i of todo){
+      showStatus('loading', `儲存中… ${done+1}/${todo.length}`);
+      fillForm(recognizedItems[i]);
+      const d={...getFormData(), customer:d0.customer};
+      await postRows(buildRows(d, 'O'+ts+'-'+(i+1)));
+      recognizedItems[i]._saved=true; done++;
+    }
+    markRecent(d0.customer);
+    showRecognizedItem(todo[todo.length-1]);
+    showStatus('success', `✓ ${done} 筆都存好了${getSchedChoice().date?'，也排好程了':''}`);
+  }catch(e){
+    showRecognizedItem(todo[done]||recognizedIndex);
+    showStatus('error', `存到第 ${done+1} 筆時失敗：${e.message}。已存好的 ${done} 筆不會重複存，再按一次「一起存」即可。`);
+  }
+  renderChips();
+}
 
 // ── 日期補年份：「9/29」→「2026/9/29」；交貨月份比訂貨小就算隔年 ──
 function normDate(v, ref){
