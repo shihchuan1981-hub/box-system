@@ -31,7 +31,19 @@ function doPost(e) {
       }
       writeSchedule(sheet, rowNo, data.schedDate, data.rush);
       if (data.orderNo !== undefined) writeOrderNo(sheet, rowNo, data.orderNo);
+      // 對到產品時，把層數、印刷帶進看板欄位（Q、R 欄）
+      if (data.layer) sheet.getRange(rowNo, BOARD_START + 1).setValue(String(data.layer));
+      if (data.print) sheet.getRange(rowNo, BOARD_START + 2).setValue(data.print);
+      if (data.productId && rowIndex < 0) { try { touchProduct(data.productId); } catch (e) {} }
       return ok(rowIndex >= 0 ? '訂單已更新' : '訂單已儲存');
+    }
+
+    if (action === 'saveProduct') {
+      return ok(saveProduct(data.product));
+    }
+
+    if (action === 'addAlias') {
+      return ok(addAlias(data.productId, data.alias));
     }
 
     if (action === 'saveCustomer') {
@@ -127,6 +139,90 @@ function deleteCustomer(id, name) {
   }
 }
 
+// ═══ 產品資料（從舊系統匯入，欄位照第一列標題） ═══
+function prodSheet() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('產品資料');
+  if (!sh) throw new Error('試算表裡找不到「產品資料」分頁');
+  return sh;
+}
+function cellText(x) {
+  if (x instanceof Date) return Utilities.formatDate(x, 'Asia/Taipei', 'yyyy/M/d');
+  return x === null || x === undefined ? '' : String(x);
+}
+
+// 只回傳這一家客戶的產品（用客戶ID或名稱找）
+function getProducts(custId, custName) {
+  const v = prodSheet().getDataRange().getValues();
+  const h = v[0].map(String);
+  const ci = h.indexOf('客戶ID'), ni = h.indexOf('客戶名稱');
+  const out = [];
+  for (let i = 1; i < v.length; i++) {
+    const r = v[i];
+    if ((custId && String(r[ci]) === custId) || (custName && String(r[ni]) === custName)) {
+      const o = {};
+      h.forEach((k, j) => { if (k) o[k] = cellText(r[j]); });
+      out.push(o);
+    }
+  }
+  return out;
+}
+
+function findProductRow(sh, id) {
+  const ids = sh.getRange(1, 1, sh.getLastRow(), 1).getValues();
+  for (let i = 1; i < ids.length; i++) if (String(ids[i][0]) === String(id)) return i + 1;
+  return -1;
+}
+
+// 新產品：自動給下一個產品ID，存在最後一列
+function saveProduct(p) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sh = prodSheet();
+    const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+    const ids = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), 1).getValues();
+    let max = 0;
+    ids.forEach(r => { const m = String(r[0]).match(/^P(\d+)$/); if (m) max = Math.max(max, +m[1]); });
+    p['產品ID'] = 'P' + ('0000' + (max + 1)).slice(-5);
+    if (!p['最後出貨']) p['最後出貨'] = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/M/d');
+    if (p['出貨次數'] === undefined) p['出貨次數'] = 0;
+    const row = h.map(k => p[k] === undefined ? '' : p[k]);
+    sh.appendRow(row);
+    const rowNo = sh.getLastRow();
+    sh.getRange(rowNo, 1, 1, h.length).setNumberFormat('@');   // 全部存成文字，品名像 1/2 才不會變日期
+    sh.getRange(rowNo, 1, 1, h.length).setValues([row.map(String)]);
+    return p;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 記住客戶的其他寫法，下次辨識直接對到
+function addAlias(id, alias) {
+  alias = String(alias || '').trim();
+  if (!alias) return '沒有寫法';
+  const sh = prodSheet();
+  const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  const col = h.indexOf('其他寫法') + 1;
+  const rowNo = findProductRow(sh, id);
+  if (rowNo < 0 || col < 1) return '找不到產品';
+  const cur = String(sh.getRange(rowNo, col).getValue() || '');
+  const list = cur ? cur.split(/[｜|]/) : [];
+  if (list.indexOf(alias) < 0) { list.push(alias); sh.getRange(rowNo, col).setNumberFormat('@').setValue(list.join('｜')); }
+  return '已記住';
+}
+
+// 下單後更新最後出貨日、出貨次數（常做的產品才會排前面）
+function touchProduct(id) {
+  const sh = prodSheet();
+  const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  const rowNo = findProductRow(sh, id);
+  if (rowNo < 0) return;
+  const lc = h.indexOf('最後出貨') + 1, nc = h.indexOf('出貨次數') + 1;
+  if (lc) sh.getRange(rowNo, lc).setNumberFormat('@').setValue(Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/M/d'));
+  if (nc) sh.getRange(rowNo, nc).setValue((Number(sh.getRange(rowNo, nc).getValue()) || 0) + 1);
+}
+
 // ── AI 辨識：伺服器端呼叫 Claude API，金鑰不暴露給瀏覽器 ──
 function analyzeOrder(fileBase64, mediaType) {
   const apiKey = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
@@ -212,6 +308,10 @@ function doGet(e) {
   }
   if (action === 'getSchedule') {
     try { return ok(getSchedule()); }
+    catch (err) { return ContentService.createTextOutput(JSON.stringify({success:false, error:err.message})).setMimeType(ContentService.MimeType.JSON); }
+  }
+  if (action === 'getProducts') {
+    try { return ok(getProducts(e.parameter.custId, e.parameter.custName)); }
     catch (err) { return ContentService.createTextOutput(JSON.stringify({success:false, error:err.message})).setMimeType(ContentService.MimeType.JSON); }
   }
   if (action === 'getOrders') {

@@ -116,6 +116,27 @@ header .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11p
 .cust-suggest .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .cust-suggest button{font:inherit;font-size:14px;font-weight:700;padding:7px 12px;border:1.5px solid var(--warning);background:#fff;color:var(--ink);border-radius:4px;cursor:pointer}
 .cust-suggest button small{font-weight:400;color:var(--ink-light);margin-left:4px}
+/* 產品比對 */
+.field.pm{background:#faf8f4;border-left:5px solid var(--border)}
+.field.pm.ok{border-left-color:var(--success);background:var(--success-light)}
+.field.pm.ask{border-left-color:var(--warning);background:var(--warning-light)}
+.pm-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.pm-title{font-size:13px;font-weight:700}
+.pm-title.ok{color:var(--success)}.pm-title.ask{color:var(--warning)}
+.pm-info{font-size:13px;margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 16px;color:var(--ink-light)}
+.pm-info b{font-size:16px;color:var(--ink)}
+.pm-info span em{font-style:normal;color:var(--ink);font-weight:700}
+.pm-warn{margin-top:6px;font-size:13px;color:var(--accent);font-weight:700}
+.pm-cands{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.pm-cand{text-align:left;font:inherit;font-size:14px;padding:9px 12px;border:1.5px solid var(--warning);background:#fff;border-radius:4px;cursor:pointer;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.pm-cand:hover{background:var(--warning-light)}
+.pm-cand small{color:var(--ink-light);font-size:12px}
+.pm-btn{font:inherit;font-size:12px;padding:5px 10px;border:1px solid var(--border);background:#fff;border-radius:4px;cursor:pointer;color:var(--ink)}
+.pm-btn.go{background:var(--success);border-color:var(--success);color:#fff;font-weight:700}
+.field .pm-q{margin:8px 0 0;border:1.5px solid var(--border);background:#fff;padding:8px 10px;font-size:15px;border-radius:4px}
+.pm-new{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px}
+.field .pm-new input,.field .pm-new select{width:auto;margin:0;border:1px solid var(--border);background:#fff;padding:6px 8px;font-size:14px}
+.field .pm-new input{min-width:160px}
 .list-search{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
 .list-search input{flex:1;min-width:200px;font-family:inherit;font-size:16px;padding:9px 12px;border:1.5px solid var(--border);border-radius:4px;outline:none}
 .list-search input:focus{border-color:var(--accent)}
@@ -246,14 +267,16 @@ tr:hover td{background:var(--accent-light)}
       <div class="field"><label>品名 / 型號</label><input id="f_product" placeholder="－"></div>
       <div class="field"><label>這筆是</label>
         <div class="type-switch" id="typeSwitch">
-          <button type="button" data-t="outer" onclick="setBoxType('outer')">外箱</button>
-          <button type="button" data-t="inner" onclick="setBoxType('inner')">內盒</button>
-          <button type="button" data-t="both" onclick="setBoxType('both')">外箱＋內盒</button>
+          <button type="button" data-t="outer" onclick="setBoxType('outer',true)">外箱</button>
+          <button type="button" data-t="inner" onclick="setBoxType('inner',true)">內盒</button>
+          <button type="button" data-t="both" onclick="setBoxType('both',true)">外箱＋內盒</button>
         </div>
       </div>
+      <div class="field full pm g-outer" id="pm_outer" style="display:none"></div>
       <div class="field g-outer"><label>外箱數量</label><input id="f_outer_qty" placeholder="－"></div>
       <div class="field g-outer"><label>外箱尺寸（長×寬×高 台分）</label><input id="f_outer_size" class="mono" placeholder="－"></div>
       <div class="field g-outer"><label>外箱用紙（空白＝自動算）</label><input id="f_outer_material" class="mono" placeholder="－"></div>
+      <div class="field full pm g-inner" id="pm_inner" style="display:none"></div>
       <div class="field g-inner"><label>內盒數量</label><input id="f_inner_qty" placeholder="－"></div>
       <div class="field g-inner"><label>內盒尺寸（長×寬×高 台分）</label><input id="f_inner_size" class="mono" placeholder="－"></div>
       <div class="field g-inner"><label>內盒用紙（空白＝自動算）</label><input id="f_inner_material" class="mono" placeholder="－"></div>
@@ -497,6 +520,7 @@ function setCustomer(id, loadMarks) {
   } else if (loadMarks) {
     $('markLoaded').classList.remove('show');
   }
+  refreshProducts();
 }
 // 取消已選的客戶，但保留打的字
 function unpickCustomer() {
@@ -506,6 +530,7 @@ function unpickCustomer() {
   $('custX').classList.toggle('show', !!$('f_customer_q').value);
   $('customerMatch').classList.remove('show');
   $('markLoaded').classList.remove('show');
+  pmErr = ''; renderPM();
 }
 function clearCustomer(focus) {
   $('f_customer_q').value = '';
@@ -561,6 +586,244 @@ function autoMatchCustomer(name) {
   }
   box.classList.add('show');
 }
+
+// ═══ 產品比對：選好客戶後，從這家的產品資料找同尺寸／同品名 ═══
+// 每一筆品項各自記住對到哪個產品（it._pm），換筆、全部一起存都不會不見
+const prodCache = {};                     // 客戶ID → 這家的產品
+const OUTER_KINDS = ['外箱','AB式','上下蓋','斬式','其他'];
+const newSlot = () => ({prod:null, picked:false, cands:[], q:'', open:false});
+const newPM = () => ({custId:'', outer:newSlot(), inner:newSlot()});
+let pm = newPM();                          // 目前畫面這一筆的比對結果
+let pmLoading = false, pmErr = '';
+const SLOT = {
+  outer:{label:'外箱', size:'f_outer_size', mat:'f_outer_material', defKind:'外箱', defLayer:5},
+  inner:{label:'內盒', size:'f_inner_size', mat:'f_inner_material', defKind:'內箱', defLayer:3}
+};
+const FKEY = {f_product:'product', f_outer_size:'outer_size', f_inner_size:'inner_size', f_outer_material:'outer_material',
+  f_inner_material:'inner_material', f_front_mark:'front_mark', f_side_mark:'side_mark', f_inner_mark:'inner_mark'};
+const sizeKey = s => { const n = String(s || '').match(/\d+(?:\.\d+)?/g); return n && n.length >= 3 ? n.slice(0, 3).map(Number).join('x') : ''; };
+const nameKey = s => norm(String(s || '').replace(/(\d)\s*[*xX×]\s*(?=\d)/g, '$1x'));
+const matKey = s => (String(s || '').match(/\d+(?:\.\d+)?/g) || []).slice(0, 2).map(Number).join('x');
+const dateNum = s => { const m = String(s || '').match(/(\d{4})\D(\d{1,2})\D(\d{1,2})/); return m ? +m[1]*10000 + +m[2]*100 + +m[3] : 0; };
+const byRecent = (a, b) => dateNum(b.最後出貨) - dateNum(a.最後出貨) || (+b.出貨次數 || 0) - (+a.出貨次數 || 0);
+const aliasesOf = p => [p.品名, ...String(p.其他寫法 || '').split(/[｜|]/)].filter(Boolean);
+const kindOf = (slot, P = pm) => (P && P[slot].prod && P[slot].prod.箱型) || SLOT[slot].defKind;
+const layerOf = (slot, P = pm) => Number(P && P[slot].prod && P[slot].prod.層數) || SLOT[slot].defLayer;
+const curItem = () => editingOrderId ? null : recognizedItems[recognizedIndex];
+// 讀寫一筆品項的欄位：畫面上這一筆讀表單，其他筆讀資料
+const tget = (it, id) => it === curItem() ? $(id).value : (it[FKEY[id]] || '');
+const tset = (it, id, v) => { if (it === curItem()) $(id).value = v; else it[FKEY[id]] = v; };
+const typeOf = it => it === curItem() ? boxType : (it._type || guessType(it));
+const slotsOf = it => { const t = typeOf(it); return t === 'outer' ? ['outer'] : t === 'inner' ? ['inner'] : ['outer', 'inner']; };
+
+async function loadProducts(c) {
+  if (prodCache[c.id]) return prodCache[c.id];
+  const res = await fetch(`${GAS_URL}?action=getProducts&custId=${encodeURIComponent(c.id)}&custName=${encodeURIComponent(c.name)}`);
+  const d = await res.json();
+  if (!d.success) throw new Error(d.error || '讀取產品資料失敗');
+  return (prodCache[c.id] = d.data.sort(byRecent));
+}
+
+// 越像分數越高：尺寸一樣 60、品名一樣 50、箱型對 +10
+function prodScore(p, name, size, slot) {
+  let s = 0;
+  const sk = sizeKey(size);
+  if (sk && sizeKey(p.尺寸) === sk) s += 60;
+  const nk = nameKey(name);
+  if (nk) {
+    const names = aliasesOf(p).map(nameKey);
+    if (names.includes(nk)) s += 50;
+    else if (names.some(x => x.length >= 3 && nk.length >= 3 && (x.includes(nk) || nk.includes(x)))) s += 25;
+  }
+  if (p.箱型) s += (slot === 'outer') === OUTER_KINDS.includes(p.箱型) ? 10 : -25;
+  return s;
+}
+
+// 選好客戶（或換筆）時呼叫：讀這家的產品，把每一筆還沒決定的品項都對一次
+async function refreshProducts() {
+  const it = curItem();
+  pm = it ? (it._pm = it._pm || newPM()) : newPM();
+  pmErr = '';
+  if (!currentCustomer || editingOrderId) { renderPM(); return; }
+  const c = currentCustomer;
+  pmLoading = !prodCache[c.id]; renderPM();
+  let list;
+  try { list = await loadProducts(c); } catch (e) { pmErr = e.message; }
+  pmLoading = false;
+  if (currentCustomer !== c) return;          // 載入中途換了客戶
+  if (list) recognizedItems.forEach(x => matchItem(x, list));
+  renderPM();
+}
+
+function matchItem(it, list) {
+  if (!it) return;
+  if (!it._pm || it._pm.custId !== currentCustomer.id) it._pm = Object.assign(newPM(), {custId: currentCustomer.id});
+  slotsOf(it).forEach(slot => {
+    const st = it._pm[slot];
+    if (st.prod || st.picked) return;
+    const size = tget(it, SLOT[slot].size).trim();
+    const name = it._ai || tget(it, 'f_product').trim();
+    if (!size && !name) return;
+    const ranked = list.map(p => ({p, s: prodScore(p, name, size, slot)}))
+      .filter(x => x.s >= 45)
+      .sort((a, b) => b.s - a.s || byRecent(a.p, b.p));
+    const top = ranked[0];
+    if (top && top.s >= 60 && (!ranked[1] || ranked[1].s <= top.s - 15)) applyTo(it, slot, top.p, false);
+    else st.cands = ranked.slice(0, 5).map(x => x.p);
+  });
+  if (it === curItem()) pm = it._pm;
+}
+
+function applyTo(it, slot, p, manual) {
+  const st = it._pm[slot];
+  st.prod = p; st.picked = manual; st.cands = []; st.open = false; st.q = '';
+  if (slot === 'outer' || !it._pm.outer.prod) tset(it, 'f_product', p.品名);
+  const S = SLOT[slot], osz = sizeKey(tget(it, S.size));
+  if (!osz && p.尺寸) tset(it, S.size, p.尺寸);
+  // 尺寸一樣才帶資料庫的用紙；客戶改了尺寸就讓公式重算
+  if (!tget(it, S.mat).trim() && p.用紙 && (!osz || osz === sizeKey(p.尺寸))) tset(it, S.mat, p.用紙);
+  if (slot === 'outer' && (p.正嘜 || p.側嘜)) { tset(it, 'f_front_mark', p.正嘜 || ''); tset(it, 'f_side_mark', p.側嘜 || ''); }
+  if (slot === 'inner' && p.正嘜 && !tget(it, 'f_inner_mark').trim()) tset(it, 'f_inner_mark', p.正嘜);
+  // 老闆手動點選的，把 AI 這次讀到的寫法記下來，下次就直接對到
+  if (manual && it._ai && !aliasesOf(p).map(nameKey).includes(nameKey(it._ai))) {
+    p.其他寫法 = [p.其他寫法, it._ai].filter(Boolean).join('｜');
+    gasPost({action:'addAlias', productId:p.產品ID, alias:it._ai}).catch(() => {});
+  }
+}
+function curOrTemp() { const it = curItem(); if (it) { it._pm = pm; return it; } return {_pm: pm}; }
+function applyProduct(slot, p, manual) { applyTo(curOrTemp(), slot, p, manual); renderPM(); if (typeof renderChips === 'function' && recognizedItems.length > 1) renderChips(); }
+function unmatchProduct(slot) { const st = pm[slot]; st.prod = null; st.picked = true; st.cands = []; st.open = true; renderPM(); }
+function pickProduct(slot, id) {
+  const p = (prodCache[currentCustomer && currentCustomer.id] || []).find(x => x.產品ID === id);
+  if (p) applyProduct(slot, p, true);
+}
+function openSearch(slot) { pm[slot].open = true; renderPM(); const q = document.querySelector(`#pm_${slot} .pm-q`); if (q) q.focus(); }
+
+function searchProducts(slot, q) {
+  const list = prodCache[currentCustomer.id] || [];
+  const nk = nameKey(q); if (!nk) return [];
+  const fit = p => !!p.箱型 && (slot === 'outer') === OUTER_KINDS.includes(p.箱型);
+  return list.filter(p => aliasesOf(p).some(n => nameKey(n).includes(nk)) || nameKey(p.尺寸).includes(nk))
+    .sort((a, b) => (fit(b) - fit(a)) || byRecent(a, b)).slice(0, 8);
+}
+
+function prodLine(p) {
+  return `${esc(p.品名)}<small>${esc([p.箱型, p.尺寸, p.用紙 && '用紙 ' + p.用紙, p.最後出貨 && '上次 ' + p.最後出貨].filter(Boolean).join('・'))}</small>`;
+}
+function candButtons(slot, list) {
+  return `<div class="pm-cands">${list.map(p => `<button type="button" class="pm-cand" onclick="pickProduct('${slot}','${esc(p.產品ID)}')"><b>${prodLine(p)}</b></button>`).join('')}</div>`;
+}
+
+function renderPM() {
+  ['outer', 'inner'].forEach(slot => {
+    const el = $('pm_' + slot), st = pm[slot], L = SLOT[slot].label;
+    const base = 'field full pm g-' + slot;
+    if (!currentCustomer || editingOrderId) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    el.className = base + (st.prod ? ' ok' : (st.cands.length ? ' ask' : ''));
+    const size = $(SLOT[slot].size).value.trim();
+    let h = '';
+    if (pmLoading) h = `<div class="pm-title">⏳ 讀取「${esc(currentCustomer.name)}」的產品資料…</div>`;
+    else if (pmErr) h = `<div class="pm-title">⚠ 讀不到產品資料：${esc(pmErr)}</div>`;
+    else if (st.prod) {
+      const p = st.prod, warns = [];
+      if (sizeKey(size) && sizeKey(p.尺寸) && sizeKey(size) !== sizeKey(p.尺寸)) warns.push(`訂單尺寸 ${esc(size)}，資料庫是 ${esc(p.尺寸)}，客戶可能改規格了。用紙會照新尺寸算；要存成新規格請按「不是這個」`);
+      const mv = $(SLOT[slot].mat).value;
+      if (p.用紙 && mv && matKey(mv) !== matKey(p.用紙)) warns.push(`訂單寫用紙 ${esc(mv)}，資料庫是 ${esc(p.用紙)}（目前照訂單）`);
+      const print = p.印刷 === '不印' ? '不印' : (p.印刷 || ((p.照片 || p.正嘜 || p.側嘜 || currentCustomer.frontMark || currentCustomer.sideMark) ? '有印' : '未確認'));
+      h = `<div class="pm-head"><span class="pm-title ok">✓ ${L}對到產品${st.picked ? '' : '（自動）'}</span>
+          <span><button type="button" class="pm-btn" onclick="openSearch('${slot}')">換一個</button> <button type="button" class="pm-btn" onclick="unmatchProduct('${slot}')">不是這個</button></span></div>
+        <div class="pm-info"><b>${esc(p.品名)}</b>
+          <span>箱型 <em>${esc(p.箱型 || '－')}</em></span><span>尺寸 <em>${esc(p.尺寸 || '－')}</em></span>
+          <span>用紙 <em>${esc(p.用紙 || '－')}</em></span><span>材質 <em>${esc(p.材質 || '－')}${p.層數 ? `（${esc(p.層數)}層）` : ''}</em></span>
+          ${p.紙色 ? `<span>紙色 <em>${esc(p.紙色)}</em></span>` : ''}<span>印刷 <em>${print}</em></span>
+          <span>上次出貨 <em>${esc(p.最後出貨 || '－')}</em>${+p.出貨次數 ? `（${esc(p.出貨次數)} 次）` : ''}</span></div>
+        ${warns.map(w => `<div class="pm-warn">⚠ ${w}</div>`).join('')}`;
+    } else if (st.cands.length) {
+      h = `<div class="pm-head"><span class="pm-title ask">${L}：有幾個很像，請點正確的</span><button type="button" class="pm-btn" onclick="openSearch('${slot}')">都不是</button></div>${candButtons(slot, st.cands)}`;
+    } else {
+      const n = (prodCache[currentCustomer.id] || []).length;
+      h = `<div class="pm-head"><span class="pm-title">${L}：這家客戶的 ${n} 個產品裡${st.picked ? '' : '找不到一樣的'}${st.picked ? '，請搜尋或存成新產品' : ''}</span></div>`;
+      st.open = true;
+    }
+    if (!pmLoading && !pmErr && st.open) {
+      const res = st.q ? searchProducts(slot, st.q) : [];
+      h += `<input class="pm-q" placeholder="搜尋這家客戶的產品：打品名或尺寸" value="${esc(st.q)}" oninput="pm.${slot}.q=this.value;renderResults('${slot}')">
+        <div id="pmr_${slot}">${st.q ? (res.length ? candButtons(slot, res) : '<div class="pm-info">找不到</div>') : ''}</div>`;
+      if (!st.prod) h += newProductForm(slot);
+    }
+    el.innerHTML = h;
+  });
+}
+// 只更新搜尋結果，打字時輸入框才不會跳掉
+function renderResults(slot) {
+  const res = pm[slot].q ? searchProducts(slot, pm[slot].q) : [];
+  $('pmr_' + slot).innerHTML = pm[slot].q ? (res.length ? candButtons(slot, res) : '<div class="pm-info">找不到</div>') : '';
+}
+
+function newProductForm(slot) {
+  const kinds = ['外箱','內箱','AB式','上下蓋','斬式','其他'];
+  const it = curItem();
+  const nm = (it && it._ai) || $('f_product').value.trim();
+  return `<div class="pm-new">🆕 新產品：
+    <input id="np_name_${slot}" value="${esc(nm)}" placeholder="品名">
+    <select id="np_kind_${slot}" onchange="$('np_layer_${slot}').value=this.value==='內箱'?'3':'5'">${kinds.map(k => `<option${k === SLOT[slot].defKind ? ' selected' : ''}>${k}</option>`).join('')}</select>
+    <select id="np_layer_${slot}"><option value="5"${SLOT[slot].defLayer === 5 ? ' selected' : ''}>五層</option><option value="3"${SLOT[slot].defLayer === 3 ? ' selected' : ''}>三層</option></select>
+    <button type="button" class="pm-btn go" onclick="saveNewProduct('${slot}', this)">存成新產品</button></div>`;
+}
+
+async function saveNewProduct(slot, btn) {
+  const name = $('np_name_' + slot).value.trim();
+  const size = $(SLOT[slot].size).value.trim();
+  if (!name) { alert('請填品名'); return; }
+  if (!sizeKey(size)) { alert(`請先填${SLOT[slot].label}尺寸（長×寬×高）`); return; }
+  const kind = $('np_kind_' + slot).value, layer = +$('np_layer_' + slot).value;
+  const mat = $(SLOT[slot].mat).value.trim().replace(/\s*×\s*\d+張$/, '') || calcMat(size, kind, layer);
+  const it = curItem();
+  const p = {
+    '客戶ID': currentCustomer.id, '客戶名稱': currentCustomer.name, '品名': name,
+    '其他寫法': it && it._ai && nameKey(it._ai) !== nameKey(name) ? it._ai : '',
+    '箱型': kind, '尺寸': sizeKey(size).split('x').join('×'), '用紙': mat, '層數': String(layer),
+    '紙色': /W$/i.test(name) ? '白' : '',
+    '正嘜': slot === 'outer' ? $('f_front_mark').value : $('f_inner_mark').value,
+    '側嘜': slot === 'outer' ? $('f_side_mark').value : '',
+    '備註': '接單系統新增'
+  };
+  btn.disabled = true; btn.textContent = '存檔中…';
+  try {
+    const r = await gasPost({action:'saveProduct', product:p});
+    if (!r.success) throw new Error(r.error);
+    (prodCache[currentCustomer.id] = prodCache[currentCustomer.id] || []).unshift(r.data);
+    if (it) it._ai = '';                      // 已經是新產品的品名，不用再記寫法
+    applyProduct(slot, r.data, true);
+  } catch (e) { alert('存檔失敗：' + e.message); btn.disabled = false; btn.textContent = '存成新產品'; }
+}
+
+// 這筆對到的產品 → 存檔時帶的產品ID、層數、印刷
+function prodExtra(P, slot) {
+  const p = P && P[slot] && P[slot].prod; if (!p) return {};
+  return {productId:p.產品ID, layer:p.層數 || '', print:p.印刷 === '不印' ? '否' : (p.印刷 === '有印' ? '是' : '')};
+}
+function markProductsUsed(P) {
+  ['outer', 'inner'].forEach(sl => { const p = P && P[sl].prod; if (p) { const t = new Date(); p.最後出貨 = `${t.getFullYear()}/${t.getMonth()+1}/${t.getDate()}`; p.出貨次數 = String((+p.出貨次數 || 0) + 1); } });
+}
+
+// 尺寸、品名改了，或切換「這筆是」，還沒手動選過的就重新比對
+function rematchCurrent(fromName) {
+  const it = curItem();
+  if (!currentCustomer || !it || !prodCache[currentCustomer.id] || it._pm !== pm) return;
+  if (fromName) it._ai = $('f_product').value.trim();
+  ['outer', 'inner'].forEach(slot => {
+    const st = pm[slot];
+    if (st.picked) return;
+    if (fromName && st.prod && $('f_product').value === st.prod.品名) return;
+    st.prod = null; st.cands = [];
+  });
+  matchItem(it, prodCache[currentCustomer.id]);
+  renderPM();
+}
+['f_outer_size', 'f_inner_size'].forEach(id => $(id).addEventListener('change', () => rematchCurrent(false)));
+$('f_product').addEventListener('change', () => rematchCurrent(true));
 
 // ── Customer DB ──
 async function loadCustomers() {
@@ -847,6 +1110,7 @@ async function analyze(){
     const [r]=await Promise.all([gasPost({action:'analyzeOrder', fileBase64, mediaType:mt}), customers.length?null:loadCustomers()]);
     if(!r.success) throw new Error(r.error||'辨識失敗');
     recognizedItems=Array.isArray(r.data)?r.data:[r.data];
+    recognizedItems.forEach(it=>{ it._ai=String(it.product||'').trim(); });
     editingOrderId=null;
     $('saveBtn').innerHTML='☁ 儲存到試算表';
     showRecognizedItem(0);
@@ -863,7 +1127,9 @@ function showRecognizedItem(idx){
   const keep = idx>0 && currentCustomer;
   if (!keep) clearCustomer();
   fillForm(item);
+  pm = item._pm = item._pm || newPM();
   if (!keep) autoMatchCustomer(item.customer||'');
+  else refreshProducts();
   const nav=$('multiNav');
   if(recognizedItems.length>1){
     nav.classList.add('show');
@@ -915,8 +1181,9 @@ function guessType(d){
   const i=!!((d.inner_size||'')+(d.inner_qty||'')+(d.inner_material||'')+(d.inner_mark||'')).trim();
   return o&&i?'both':i?'inner':o?'outer':'both';
 }
-function setBoxType(t){
+function setBoxType(t, user){
   boxType=t;
+  if (user) setTimeout(()=>rematchCurrent(false));
   const g=document.querySelector('.fields-grid');
   g.classList.toggle('t-outer',t==='outer'); g.classList.toggle('t-inner',t==='inner');
   document.querySelectorAll('#typeSwitch button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
@@ -971,6 +1238,7 @@ function getFormData(){
     inner_mark:$('f_inner_mark').value.trim(),
     notes:$('f_notes').value,
     _type:boxType,
+    _pm:(curItem()||{})._pm||null,
     saved_at:new Date().toLocaleString('zh-TW')
   };
 }
@@ -980,14 +1248,14 @@ function getFormData(){
 function buildRows(d, id){
   if (d._type==='outer') Object.assign(d,{inner_size:'',inner_qty:'',inner_material:'',inner_mark:''});
   if (d._type==='inner') Object.assign(d,{outer_size:'',outer_qty:'',outer_material:'',front_mark:'',side_mark:''});
-  const outerM=d.outer_material||calcMaterial(d.outer_size,'outer');
-  const innerM=d.inner_material||calcMaterial(d.inner_size,'inner');
+  const outerM=d.outer_material||calcMaterial(d.outer_size,'outer',d._pm);
+  const innerM=d.inner_material||calcMaterial(d.inner_size,'inner',d._pm);
   const sch=getSchedChoice();
   const base={action:'saveOrder', date:d.saved_at, customer:d.customer, delivery:d.delivery_date, notes:d.notes, orderNo:(d.order_no||'').trim(),
     schedDate:sch.date, rush:sch.date!==undefined||sch.rush?sch.rush:undefined};
-  const outerRow={...base, product:d.product, outerSize:d.outer_size, outerMaterial:outerM, outerQty:d.outer_qty,
+  const outerRow={...base, ...prodExtra(d._pm,'outer'), product:d.product, outerSize:d.outer_size, outerMaterial:outerM, outerQty:d.outer_qty,
     innerSize:'', innerMaterial:'', innerQty:'', frontMark:d.front_mark, sideMark:d.side_mark};
-  const innerRow={...base, product:d.product, outerSize:'', outerMaterial:'', outerQty:'',
+  const innerRow={...base, ...prodExtra(d._pm,'inner'), product:d.product, outerSize:'', outerMaterial:'', outerQty:'',
     innerSize:d.inner_size, innerMaterial:innerM, innerQty:d.inner_qty, frontMark:d.inner_mark, sideMark:''};
   if (editingOrderId) {
     // 編輯舊訂單：照原本一列更新
@@ -999,9 +1267,9 @@ function buildRows(d, id){
   // 隔板這類沒有尺寸、只有用紙和數量的內盒品項，也算內盒
   const hasInner=!!d.inner_size.trim() || (!hasOuter && !!(d.inner_material||d.inner_qty));
   if (hasOuter && hasInner) return [
-    {...outerRow, orderId:id+'-1', product:d.product+' 外箱'},
-    {...innerRow, orderId:id+'-2', product:d.product+' 內盒'}];
-  if (hasInner) return [{...innerRow, orderId:id}];
+    {...outerRow, orderId:id+'-1', product:d._pm&&d._pm.outer.prod ? d._pm.outer.prod.品名 : d.product+' 外箱'},
+    {...innerRow, orderId:id+'-2', product:d._pm&&d._pm.inner.prod ? d._pm.inner.prod.品名 : d.product+' 內盒'}];
+  if (hasInner) return [{...innerRow, orderId:id, product:d._pm&&d._pm.inner.prod ? d._pm.inner.prod.品名 : d.product}];
   return [{...outerRow, orderId:id}];
 }
 async function postRows(rows){
@@ -1025,7 +1293,7 @@ $('saveBtn').addEventListener('click', async()=>{
   showStatus('loading', isEdit ? '更新試算表中...' : '儲存到 Google 試算表...');
   try{
     await postRows(buildRows(d, 'O'+Date.now()));
-    markRecent(d.customer);
+    markRecent(d.customer); if(!isEdit) markProductsUsed(d._pm);
     if (isEdit) {
       showStatus('success','✓ 訂單已更新！');
       editingOrderId=null;
@@ -1058,8 +1326,9 @@ async function saveAll(){
     for (const i of todo){
       showStatus('loading', `儲存中… ${done+1}/${todo.length}`);
       fillForm(recognizedItems[i]);
-      const d={...getFormData(), customer:d0.customer};
+      const d={...getFormData(), customer:d0.customer, _pm:recognizedItems[i]._pm||null};
       await postRows(buildRows(d, 'O'+ts+'-'+(i+1)));
+      markProductsUsed(d._pm);
       recognizedItems[i]._saved=true; done++;
     }
     markRecent(d0.customer);
@@ -1110,11 +1379,15 @@ function parseSize(str){
   const p=str.replace(/[×xX*\s]/g,'×').split('×').map(s=>parseFloat(s));
   return p.length===3&&p.every(n=>!isNaN(n))?{l:p[0],w:p[1],h:p[2]}:null;
 }
-function calcMaterial(size,type){
+// 紙長：三層 +8、五層 +12；紙寬看箱型（AB式 寬×2+高）
+function calcMat(size,kind,layer){
   const s=parseSize(size); if(!s) return '';
-  if(type==='outer'){return `${s.w+s.h+2} × ${(s.l+s.w)*2+12}`;}
-  else{return `${s.w+s.h} × ${(s.l+s.w)*2+8}`;}
+  const add = Number(layer)===3 ? 8 : 12;
+  const w = kind==='內箱'||kind==='斬式' ? s.w+s.h : kind==='AB式' ? 2*s.w+s.h : kind==='上下蓋' ? s.l+2*s.h : s.w+s.h+2;
+  const l = kind==='上下蓋' ? s.w+2*s.h : (s.l+s.w)*2+add;
+  return `${w}×${l}`;
 }
+function calcMaterial(size,type,P){ const sl=type==='outer'?'outer':'inner'; return calcMat(size, kindOf(sl,P||pm), layerOf(sl,P||pm)); }
 
 // ── Print ──
 $('printBtn').addEventListener('click',()=>{
