@@ -65,7 +65,29 @@ section h2 small{font-size:13px;color:var(--ink-2);font-weight:500}
 button:focus-visible,a:focus-visible{outline:3px solid var(--warn);outline-offset:2px}
 .empty{padding:18px;text-align:center;color:var(--ink-2);background:var(--surface);border:1px dashed var(--line);border-radius:6px;font-size:14px}
 .day{font-size:15px;font-weight:700;margin:10px 0 4px;color:var(--ink-2)}
-@media (max-width:720px){.row{grid-template-columns:1fr}.acts{justify-content:flex-start}.sum{grid-template-columns:repeat(2,1fr)}}
+.order{background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.order.rush{border-left:6px solid var(--accent)}
+.order.late .ohead{background:var(--accent-soft)}
+.ohead{padding:10px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;align-items:center}
+.ono{font-family:var(--mono);font-size:14px;color:var(--ink-2);font-weight:600}
+.count{font-size:13px;color:var(--ink-2)}
+.prog{display:inline-flex;gap:4px;flex-wrap:wrap}
+.prog span{font-size:12px;padding:1px 6px;border-radius:3px;background:var(--chip);color:var(--ink-2);font-variant-numeric:tabular-nums}
+.prog span.part{background:var(--warn-soft);color:var(--warn);font-weight:700}
+.prog span.all{background:var(--ok);color:#fff;font-weight:700}
+.toggle{font:inherit;font-size:13px;color:var(--ink-2);background:none;border:none;padding:4px 0;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.items{border-top:1px solid var(--line);overflow-x:auto}
+.items table{width:100%;border-collapse:collapse;font-size:14px;min-width:640px}
+.items th,.items td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+.items th{font-size:12px;color:var(--ink-2);font-weight:700;background:var(--bg)}
+.items tr:last-child td{border-bottom:none}
+.items .mono{font-family:var(--mono);font-weight:600}
+.type{font-size:12px;font-weight:700;padding:1px 7px;border-radius:3px;white-space:nowrap}
+.type.out{background:var(--ink);color:#fff}
+.type.in{background:var(--chip);color:var(--ink)}
+.idate{display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--ink-2);position:relative;border:1px solid var(--line);border-radius:4px;padding:3px 8px;cursor:pointer;white-space:nowrap}
+.idate input{position:absolute;inset:0;opacity:0;cursor:pointer}
+@media (max-width:720px){.row,.ohead{grid-template-columns:1fr}.acts{justify-content:flex-start}.sum{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
@@ -81,7 +103,7 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--warn);outline-offse
   </div>
   <div class="sum" id="sum"></div>
   <div id="msg"></div>
-  <section id="sec-un"><h2>還沒排程 <small>照交貨日排，紅色＝已過交期，橘色＝3 天內要交</small></h2><div class="list" id="un"></div></section>
+  <section id="sec-un"><h2>還沒排程 <small>一張卡片＝一張訂單，照交貨日排。紅色＝已過交期，橘色＝3 天內要交</small></h2><div class="list" id="un"></div></section>
   <section id="sec-today"><h2 id="h-today">今天</h2><div class="list" id="today"></div></section>
   <section id="sec-tmr"><h2 id="h-tmr">明天</h2><div class="list" id="tmr"></div></section>
   <section id="sec-later"><h2>之後</h2><div id="later"></div></section>
@@ -115,53 +137,86 @@ async function load(){
   render();
 }
 
+// 同一張訂單的品項合在一起：有客戶單號用單號，沒有就用訂單ID去掉最後的 -1、-2
+function groupKey(o){ return o.cust + '｜' + (o.orderNo || String(o.no).replace(/(-\d+)+$/,'')); }
+function groupOf(list){
+  const m = new Map();
+  list.forEach(o => { const k = groupKey(o); if(!m.has(k)) m.set(k, []); m.get(k).push(o); });
+  return [...m.entries()].map(([key, items]) => {
+    items.sort((a,b) => (a.type===b.type?0:a.type==='內盒'?-1:1) || String(a.no).localeCompare(String(b.no), undefined, {numeric:true}));
+    const dues = items.map(o => o.dueKey).filter(k => /^\d{4}-/.test(k)).sort();
+    return { key, items, cust: items[0].cust, orderNo: items[0].orderNo, dueKey: dues[0] || '', due: (items.find(o => o.dueKey === dues[0]) || items[0]).due,
+             rush: items.some(o => o.rush), sched: items.map(o => o.sched).filter(Boolean).sort()[0] || '' };
+  });
+}
+const byDue = (a,b) => (b.rush-a.rush) || String(a.dueKey||'9').localeCompare(String(b.dueKey||'9'));
+const open = new Set();
+function toggle(id){ open.has(id) ? open.delete(id) : open.add(id); render(); }
+
 function render(){
   const T = addDays(0), M = addDays(1);
-  const un = orders.filter(o => !o.sched).sort((a,b) => String(a.dueKey||'9').localeCompare(String(b.dueKey||'9')));
-  const today = orders.filter(o => o.sched && o.sched <= T).sort(byPriority);
-  const tmr = orders.filter(o => o.sched === M).sort(byPriority);
-  const later = orders.filter(o => o.sched && o.sched > M).sort((a,b) => a.sched.localeCompare(b.sched) || byPriority(a,b));
-  const late = un.filter(o => (daysTo(o.dueKey) ?? 99) < 0).length;
-  const soon = un.filter(o => { const n = daysTo(o.dueKey); return n !== null && n >= 0 && n <= 3; }).length;
+  const un = groupOf(orders.filter(o => !o.sched)).sort((a,b) => String(a.dueKey||'9').localeCompare(String(b.dueKey||'9')));
+  const today = groupOf(orders.filter(o => o.sched && o.sched <= T)).sort(byDue);
+  const tmr = groupOf(orders.filter(o => o.sched === M)).sort(byDue);
+  const laterItems = orders.filter(o => o.sched && o.sched > M);
+  const days = [...new Set(laterItems.map(o => o.sched))].sort();
+  const later = days.map(d => ({ d, groups: groupOf(laterItems.filter(o => o.sched === d)).sort(byDue) }));
+  const nItems = g => g.reduce((n,x) => n + x.items.length, 0);
+  const late = un.filter(g => (daysTo(g.dueKey) ?? 99) < 0).length;
+  const soon = un.filter(g => { const n = daysTo(g.dueKey); return n !== null && n >= 0 && n <= 3; }).length;
+  const laterN = later.reduce((n,x) => n + x.groups.length, 0);
 
   $('sum').innerHTML = `
-    <a href="#sec-un" class="${late||soon?'alert':''}"><b>${un.length}</b><span>還沒排${late?`・${late} 張過交期`:soon?`・${soon} 張快到期`:''}</span></a>
-    <a href="#sec-today"><b>${today.length}</b><span>今天</span></a>
-    <a href="#sec-tmr"><b>${tmr.length}</b><span>明天</span></a>
-    <a href="#sec-later"><b>${later.length}</b><span>之後</span></a>`;
+    <a href="#sec-un" class="${late||soon?'alert':''}"><b>${un.length}</b><span>張單還沒排（${nItems(un)} 項）${late?`・${late} 張過交期`:soon?`・${soon} 張快到期`:''}</span></a>
+    <a href="#sec-today"><b>${today.length}</b><span>張單今天做（${nItems(today)} 項）</span></a>
+    <a href="#sec-tmr"><b>${tmr.length}</b><span>張單明天（${nItems(tmr)} 項）</span></a>
+    <a href="#sec-later"><b>${laterN}</b><span>張單之後（${laterItems.length} 項）</span></a>`;
   $('h-today').innerHTML = `今天 <small>${label(T)}</small>`;
   $('h-tmr').innerHTML = `明天 <small>${label(M)}</small>`;
 
-  $('un').innerHTML = un.length ? un.map(o => row(o,'un')).join('') : '<div class="empty">全部都排好了</div>';
-  $('today').innerHTML = today.length ? today.map(o => row(o,'today')).join('') : '<div class="empty">今天還沒有排單，從上面「還沒排程」按「排今天」</div>';
-  $('tmr').innerHTML = tmr.length ? tmr.map(o => row(o,'tmr')).join('') : '<div class="empty">明天還沒有排單</div>';
-  if(!later.length){ $('later').innerHTML = '<div class="empty">沒有</div>'; return; }
-  let html = '', cur = '';
-  later.forEach(o => { if(o.sched !== cur){ if(cur) html += '</div>'; cur = o.sched; html += `<div class="day">${label(cur)}</div><div class="list">`; } html += row(o,'later'); });
-  $('later').innerHTML = html + '</div>';
+  $('un').innerHTML = un.length ? un.map(g => card(g,'un')).join('') : '<div class="empty">全部都排好了</div>';
+  $('today').innerHTML = today.length ? today.map(g => card(g,'today')).join('') : '<div class="empty">今天還沒有排單，從上面「還沒排程」按「排今天」</div>';
+  $('tmr').innerHTML = tmr.length ? tmr.map(g => card(g,'tmr')).join('') : '<div class="empty">明天還沒有排單</div>';
+  $('later').innerHTML = later.length ? later.map(x => `<div class="day">${label(x.d)}</div><div class="list">${x.groups.map(g => card(g,'later')).join('')}</div>`).join('') : '<div class="empty">沒有</div>';
 }
 
-function row(o, where){
-  const n = daysTo(o.dueKey);
+function card(g, where){
+  const n = daysTo(g.dueKey);
   const dueCls = n === null ? '' : n < 0 ? 'late' : n <= 3 ? 'soon' : '';
-  const dueTxt = n === null ? (o.due || '－') : n < 0 ? `${o.due}（過 ${-n} 天）` : n === 0 ? `${o.due}（今天）` : `${o.due}（${n} 天後）`;
-  const carry = where === 'today' && o.sched < addDays(0) ? `<span class="pill carry">${label(o.sched)} 排的，還沒做完</span>` : '';
-  const dots = where === 'un' ? '' : `<span class="dots">${o.route.map(i => `<span class="dot ${o.prog[i]||''}">${STATIONS[i]}</span>`).join('')}</span>`;
-  const id = esc(o.no);
-  const dateBtn = `<label>${where==='un'?'選日期':'改日期'}<input type="date" aria-label="選排程日期" onchange="setSched('${id}', this.value)"></label>`;
-  const rushBtn = `<button class="${o.rush?'rush-on':''}" onclick="toggleRush('${id}')">${o.rush?'急件 ✓':'急件'}</button>`;
+  const dueTxt = n === null ? (g.due || '－') : n < 0 ? `${g.due}（過 ${-n} 天）` : n === 0 ? `${g.due}（今天）` : `${g.due}（${n} 天後）`;
+  const nIn = g.items.filter(o => o.type === '內盒').length, nOut = g.items.length - nIn;
+  const what = [nIn ? `內盒 ${nIn}` : '', nOut ? `外箱 ${nOut}` : ''].filter(Boolean).join('・');
+  const carry = where === 'today' && g.sched < addDays(0) ? `<span class="pill carry">${label(g.sched)} 排的，還沒做完</span>` : '';
+  const prog = where === 'un' ? '' : `<span class="prog">${STATIONS.map((s,i) => {
+      const need = g.items.filter(o => o.route.includes(i)); if(!need.length) return '';
+      const done = need.filter(o => o.prog[i] === 'done').length;
+      return `<span class="${done===need.length?'all':done||need.some(o=>o.prog[i])?'part':''}">${s} ${done}/${need.length}</span>`; }).join('')}</span>`;
+  const gid = where + '｜' + g.key, ids = JSON.stringify(g.items.map(o => o.no)).replace(/"/g,'&quot;');
+  const dateBtn = `<label>${where==='un'?'選日期':'改日期'}<input type="date" aria-label="選排程日期" onchange="schedGroup(${ids}, this.value)"></label>`;
+  const rushBtn = `<button class="${g.rush?'rush-on':''}" onclick="rushGroup(${ids}, ${!g.rush})">${g.rush?'急件 ✓':'急件'}</button>`;
   let acts;
-  if(where === 'un') acts = `<button class="go" onclick="setSched('${id}', addDays(0))">排今天</button><button onclick="setSched('${id}', addDays(1))">排明天</button>${dateBtn}${rushBtn}<button class="light" onclick="shipped('${id}')">已出貨</button>`;
-  else if(where === 'today') acts = `<button onclick="setSched('${id}', addDays(1))">改明天</button>${dateBtn}${rushBtn}<button class="light" onclick="setSched('${id}', '')">取消排程</button>`;
-  else acts = `<button class="go" onclick="setSched('${id}', addDays(0))">提前到今天</button>${dateBtn}${rushBtn}<button class="light" onclick="setSched('${id}', '')">取消排程</button>`;
-  return `<div class="row ${o.rush?'rush':''} ${where==='un'&&n!==null&&n<0?'late':''}">
-    <div class="info">
-      <div class="l1"><span class="cust">${esc(o.cust)}</span><span class="prod">${esc(o.prod)}</span>
-        ${o.rush?'<span class="pill rush">急件</span>':''}${o.kind!=='釘箱'?`<span class="pill kind">${esc(o.kind)}</span>`:''}${carry}</div>
-      <div class="l2"><span class="mono">${esc(o.size)}</span><span>${esc(o.qty)}</span>
-        <span class="due ${dueCls}">交貨 ${esc(dueTxt)}</span>${dots}</div>
+  if(where === 'un') acts = `<button class="go" onclick="schedGroup(${ids}, addDays(0))">整張排今天</button><button onclick="schedGroup(${ids}, addDays(1))">排明天</button>${dateBtn}${rushBtn}<button class="light" onclick="shipGroup(${ids})">已出貨</button>`;
+  else if(where === 'today') acts = `<button onclick="schedGroup(${ids}, addDays(1))">改明天</button>${dateBtn}${rushBtn}<button class="light" onclick="schedGroup(${ids}, '')">取消排程</button>`;
+  else acts = `<button class="go" onclick="schedGroup(${ids}, addDays(0))">提前到今天</button>${dateBtn}${rushBtn}<button class="light" onclick="schedGroup(${ids}, '')">取消排程</button>`;
+  const isOpen = open.has(gid) || g.items.length === 1;
+  const rows = g.items.map(o => `<tr>
+      <td><span class="type ${o.type==='內盒'?'in':'out'}">${o.type}</span></td>
+      <td>${esc(o.prod)}${o.kind!=='釘箱'?` <span class="pill kind">${esc(o.kind)}</span>`:''}</td>
+      <td class="mono">${esc(o.size)||'－'}</td><td>${esc(o.qty)||'－'}</td><td class="mono">${esc(o.material)||'－'}</td>
+      <td>${where==='un'?'':`<span class="dots">${o.route.map(i => `<span class="dot ${o.prog[i]||''}">${STATIONS[i]}</span>`).join('')}</span>`}</td>
+      <td><label class="idate">${o.sched ? label(o.sched) : '只排這項'}<input type="date" aria-label="只改這一項的日期" onchange="schedGroup(['${esc(o.no)}'], this.value)"></label></td>
+    </tr>`).join('');
+  return `<div class="order ${g.rush?'rush':''} ${where==='un'&&n!==null&&n<0?'late':''}">
+    <div class="ohead">
+      <div class="info">
+        <div class="l1"><span class="cust">${esc(g.cust)}</span>${g.orderNo?`<span class="ono">單號 ${esc(g.orderNo)}</span>`:''}
+          ${g.rush?'<span class="pill rush">急件</span>':''}${carry}</div>
+        <div class="l2"><span class="due ${dueCls}">交貨 ${esc(dueTxt)}</span><span class="count">${g.items.length} 項（${what}）</span>${prog}</div>
+        ${g.items.length > 1 ? `<div><button class="toggle" onclick="toggle('${esc(gid)}')">${isOpen ? '收起品項 ▴' : `看 ${g.items.length} 個品項 ▾`}</button></div>` : ''}
+      </div>
+      <div class="acts">${acts}</div>
     </div>
-    <div class="acts">${acts}</div>
+    ${isOpen ? `<div class="items"><table><thead><tr><th>類型</th><th>品名</th><th>尺寸</th><th>數量</th><th>用紙</th><th>${where==='un'?'':'進度'}</th><th>排程</th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}
   </div>`;
 }
 
@@ -170,18 +225,18 @@ async function post(body){
   const d = await res.json();
   if(!d.success) throw new Error(d.error || '寫入失敗');
 }
-async function change(no, apply, body){
-  const o = orders.find(x => x.no === no); if(!o) return;
-  const before = {...o};
-  apply(o); render();                     // 畫面先變，不用等
-  try{ await post(body); }
-  catch(e){ Object.assign(o, before); render(); $('msg').innerHTML = `<div class="msg err">沒存到：${esc(e.message)}，請再按一次。</div>`; }
+async function change(nos, apply, body){
+  const list = orders.filter(x => nos.includes(x.no)); if(!list.length) return;
+  const before = list.map(o => ({...o}));
+  list.forEach(apply); render();               // 畫面先變，不用等
+  try{ await post(body); $('msg').innerHTML=''; }
+  catch(e){ list.forEach((o,i) => Object.assign(o, before[i])); render(); $('msg').innerHTML = `<div class="msg err">沒存到：${esc(e.message)}，請再按一次。</div>`; }
 }
-function setSched(no, date){ change(no, o => { o.sched = date; }, {action:'setSchedule', orderId:no, schedDate:date}); }
-function toggleRush(no){ const o = orders.find(x => x.no === no); change(no, x => { x.rush = !x.rush; }, {action:'setSchedule', orderId:no, rush:!o.rush}); }
-async function shipped(no){
-  orders = orders.filter(x => x.no !== no); render();
-  try{ await post({action:'updateOrderStatus', orderId:no, status:'已出貨'}); }
+function schedGroup(nos, date){ change(nos, o => { o.sched = date; }, {action:'setSchedule', orderIds:nos, schedDate:date}); }
+function rushGroup(nos, on){ change(nos, o => { o.rush = on; }, {action:'setSchedule', orderIds:nos, rush:on}); }
+async function shipGroup(nos){
+  orders = orders.filter(x => !nos.includes(x.no)); render();
+  try{ await post({action:'updateOrderStatus', orderIds:nos, status:'已出貨'}); }
   catch(e){ $('msg').innerHTML = `<div class="msg err">沒存到：${esc(e.message)}</div>`; load(); }
 }
 

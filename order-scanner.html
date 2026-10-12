@@ -983,7 +983,7 @@ function buildRows(d, id){
   const outerM=d.outer_material||calcMaterial(d.outer_size,'outer');
   const innerM=d.inner_material||calcMaterial(d.inner_size,'inner');
   const sch=getSchedChoice();
-  const base={action:'saveOrder', date:d.saved_at, customer:d.customer, delivery:d.delivery_date, notes:d.notes,
+  const base={action:'saveOrder', date:d.saved_at, customer:d.customer, delivery:d.delivery_date, notes:d.notes, orderNo:(d.order_no||'').trim(),
     schedDate:sch.date, rush:sch.date!==undefined||sch.rush?sch.rush:undefined};
   const outerRow={...base, product:d.product, outerSize:d.outer_size, outerMaterial:outerM, outerQty:d.outer_qty,
     innerSize:'', innerMaterial:'', innerQty:'', frontMark:d.front_mark, sideMark:d.side_mark};

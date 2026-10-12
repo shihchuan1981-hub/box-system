@@ -30,6 +30,7 @@ function doPost(e) {
         rowNo = sheet.getLastRow();
       }
       writeSchedule(sheet, rowNo, data.schedDate, data.rush);
+      if (data.orderNo !== undefined) writeOrderNo(sheet, rowNo, data.orderNo);
       return ok(rowIndex >= 0 ? '訂單已更新' : '訂單已儲存');
     }
 
@@ -44,17 +45,15 @@ function doPost(e) {
     if (action === 'updateOrderStatus') {
       const sheet = ss.getSheetByName('訂單紀錄');
       const rows = sheet.getDataRange().getValues();
+      const ids = (data.orderIds || [data.orderId]).map(String);
       for (let i = 1; i < rows.length; i++) {
-        if (rows[i][0] == data.orderId) {
-          sheet.getRange(i+1, 15).setValue(data.status);
-          break;
-        }
+        if (ids.indexOf(String(rows[i][0])) >= 0) sheet.getRange(i+1, 15).setValue(data.status);
       }
       return ok('狀態已更新');
     }
 
     if (action === 'setSchedule') {
-      return ok(setSchedule(data.orderId, data.schedDate, data.rush));
+      return ok(setSchedule(data.orderIds || [data.orderId], data.schedDate, data.rush));
     }
 
     if (action === 'updateStation') {
@@ -257,7 +256,7 @@ function initSheets() {
 // 訂單紀錄 P 欄以後是排程用的欄位（由 setupBoard 建立）
 
 const BOARD_COLS = ['楞別','層數','印刷','開槽','成型方式','急件','排程日期',
-                    '裁切進度','印刷進度','開槽進度','釘箱進度','出貨進度','小標張數'];
+                    '裁切進度','印刷進度','開槽進度','釘箱進度','出貨進度','小標張數','客戶單號'];
 const BOARD_START = 16;          // P 欄 = 第 16 欄
 const STATIONS = ['裁切','印刷','開槽','釘箱','出貨'];
 const TZ = 'Asia/Taipei';
@@ -363,7 +362,8 @@ function buildOrder(r, b, sched) {
       flute: String(b[0] || ''), layer: layer, kind: kind,
       material: String(r[isInner ? 8 : 5] || '') || calcMaterial(size, layer, kind),
       rush: isYes(b[5]), sched: sched, note: String(r[13] || ''),
-      route: route, prog: prog, copies: Number(b[12]) || 1
+      route: route, prog: prog, copies: Number(b[12]) || 1,
+      orderNo: String(b[13] || ''), type: isInner ? '內盒' : '外箱'
     };
 }
 
@@ -394,22 +394,30 @@ function writeSchedule(sheet, rowNo, schedDate, rush) {
   }
 }
 
-function setSchedule(orderId, schedDate, rush) {
+// 一次排一整張訂單（多筆）
+function setSchedule(orderIds, schedDate, rush) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
     const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('訂單紀錄');
     const ids = sh.getRange(1, 1, sh.getLastRow(), 1).getValues();
+    const want = orderIds.map(String);
+    let n = 0;
     for (let i = 1; i < ids.length; i++) {
-      if (String(ids[i][0]) === String(orderId)) {
-        writeSchedule(sh, i + 1, schedDate, rush);
-        return '已排程';
-      }
+      if (want.indexOf(String(ids[i][0])) >= 0) { writeSchedule(sh, i + 1, schedDate, rush); n++; }
     }
-    throw new Error('找不到訂單：' + orderId);
+    if (!n) throw new Error('找不到訂單：' + want.join(', '));
+    return '已排程 ' + n + ' 筆';
   } finally {
     lock.releaseLock();
   }
+}
+
+// 客戶的訂單號碼（例如 4677-2），排程看板用它把同一張訂單的品項合在一起
+function writeOrderNo(sheet, rowNo, orderNo) {
+  const col = BOARD_START + 13;
+  if (!sheet.getRange(1, col).getValue()) sheet.getRange(1, col).setValue('客戶單號').setFontWeight('bold');
+  sheet.getRange(rowNo, col).setValue(String(orderNo || ''));
 }
 
 // ── 平板按「開始／完成」 ──
