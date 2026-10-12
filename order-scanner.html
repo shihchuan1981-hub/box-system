@@ -139,6 +139,8 @@ header .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11p
 .pm-new{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px}
 .field .pm-new input,.field .pm-new select{width:auto;margin:0;border:1px solid var(--border);background:#fff;padding:6px 8px;font-size:14px}
 .field .pm-new input{min-width:160px}
+.mk-attach{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.mk-attach .cam-btn{font-size:14px;padding:9px 14px}
 .mk-thumb{width:96px;height:72px;object-fit:cover;border-radius:4px;border:1px solid var(--border);background:var(--tag-bg);cursor:zoom-in;flex:none}
 .pm-photo{display:flex;gap:10px;align-items:center;margin-top:8px;font-size:12px;color:var(--ink-light)}
 .pm-photo .mk-thumb{width:140px;height:105px}
@@ -300,11 +302,13 @@ tr:hover td{background:var(--accent-light)}
       <div class="field g-outer"><label>外箱尺寸（長×寬×高 台分）</label><input id="f_outer_size" class="mono" placeholder="－"></div>
       <div class="field g-outer"><label>外箱用紙（空白＝自動算）</label><input id="f_outer_material" class="mono" placeholder="－"></div>
       <div class="field g-outer"><label>外箱印刷（決定要不要排印刷站）</label><div class="type-switch" id="pr_outer"></div></div>
+      <div class="field full g-outer"><label>外箱麥頭照片（印好的拍一張，正嘜側嘜同一張）</label><div class="mk-attach" id="mk_outer"></div></div>
       <div class="field full pm g-inner" id="pm_inner" style="display:none"></div>
       <div class="field g-inner"><label>內盒數量</label><input id="f_inner_qty" placeholder="－"></div>
       <div class="field g-inner"><label>內盒尺寸（長×寬×高 台分）</label><input id="f_inner_size" class="mono" placeholder="－"></div>
       <div class="field g-inner"><label>內盒用紙（空白＝自動算）</label><input id="f_inner_material" class="mono" placeholder="－"></div>
       <div class="field g-inner"><label>內盒印刷（決定要不要排印刷站）</label><div class="type-switch" id="pr_inner"></div></div>
+      <div class="field full g-inner"><label>內盒麥頭照片（印好的拍一張）</label><div class="mk-attach" id="mk_inner"></div></div>
       <div class="field"><label>條碼</label><input id="f_barcode" class="mono" placeholder="－"></div>
       <div class="field"><label>Item No.</label><input id="f_item_no" class="mono" placeholder="－"></div>
       <div class="field full g-outer"><label>正嘜 Front Mark（變數用 [變數名] 標記）</label><textarea id="f_front_mark" rows="5" placeholder="－"></textarea></div>
@@ -313,7 +317,8 @@ tr:hover td{background:var(--accent-light)}
       <div class="field full sched-field">
         <label>排程（存檔時一起排好）</label>
         <div class="sched-row">
-          <select id="f_sched" onchange="document.getElementById('f_sched_date').style.display=this.value==='pick'?'inline-block':'none'">
+          <select id="f_sched" onchange="document.getElementById('f_sched_date').style.display=this.value==='pick'?'inline-block':'none';try{localStorage.setItem('schedPref',this.value==='shipped'?'shipped':'')}catch(e){}">
+            <option value="shipped">已出貨（補登舊單，不排程）</option>
             <option value="">先不排</option>
             <option value="today">排今天</option>
             <option value="tomorrow">排明天</option>
@@ -788,7 +793,7 @@ function candButtons(slot, list) {
 }
 
 function renderPM() {
-  renderPrint();
+  renderPrint(); renderMk();
   ['outer', 'inner'].forEach(slot => {
     const el = $('pm_' + slot), st = pm[slot], L = SLOT[slot].label;
     const base = 'field full pm g-' + slot;
@@ -945,6 +950,71 @@ function rememberPrint(it, P) {
   });
 }
 ['f_front_mark', 'f_side_mark', 'f_inner_mark', 'f_notes', 'f_product'].forEach(id => $(id).addEventListener('input', () => renderPrint()));
+// ═══ 接單時附麥頭照片：先存在這一筆，按儲存時一起上傳到產品 ═══
+let editPhoto = {outer:null, inner:null};
+const pendingOf = (it, slot) => it ? ((it._photo || {})[slot] || null) : editPhoto[slot];
+function renderMk() {
+  const it = curItem();
+  ['outer', 'inner'].forEach(slot => {
+    const el = $('mk_' + slot); if (!el) return;
+    if (editingOrderId) { el.innerHTML = '<span class="pr-why">編輯舊訂單時不能附照片，請到「📷 出貨麥頭」拍</span>'; return; }
+    const pend = pendingOf(it, slot), p = pm[slot] && pm[slot].prod, last = photoList(p)[0];
+    let h = '';
+    if (pend) h += `<img class="mk-thumb" src="${pend}" alt="麥頭照片" onclick="showPending('${slot}')"><span class="pr-why">✓ 已附，按儲存時一起上傳</span><button type="button" class="pm-btn" onclick="dropPhoto('${slot}')">移除</button>`;
+    else if (last) h += photoImg(last.id) + `<span class="pr-why">上次麥頭 ${esc(last.date)}</span>`;
+    h += `<label class="cam-btn">${pend ? '重拍 ' : '📷 附印好的麥頭 '}<input type="file" accept="image/*" capture="environment" onchange="attachPhoto('${slot}', this)"></label>`;
+    el.innerHTML = h;
+  });
+}
+async function attachPhoto(slot, input) {
+  const f = input.files[0]; if (!f) return;
+  let img;
+  try { img = await compressImage(f); } catch (e) { alert(e.message); return; }
+  const it = curItem();
+  if (it) { it._photo = it._photo || {}; it._photo[slot] = img; if (!it['print_' + slot]) it['print_' + slot] = '是'; }
+  else { editPhoto[slot] = img; if (!editPrint[slot]) editPrint[slot] = '是'; }
+  renderMk(); renderPrint();
+}
+function dropPhoto(slot) { const it = curItem(); if (it && it._photo) it._photo[slot] = null; else editPhoto[slot] = null; renderMk(); }
+function showPending(slot) {
+  const src = pendingOf(curItem(), slot); if (!src) return;
+  const o = document.createElement('div'); o.className = 'ph-over'; o.onclick = () => o.remove();
+  o.innerHTML = `<img src="${src}" alt="麥頭照片"><span>點一下關閉</span>`; document.body.appendChild(o);
+}
+// 有附照片、但這筆還沒對到產品 → 用這筆的資料建一個新產品（照片要掛在產品上）
+async function ensureProducts(d) {
+  const it = d._item; if (!it || !it._photo) return;
+  const cust = customers.find(c => c.name === d.customer) || currentCustomer; if (!cust) return;
+  if (!d._pm) d._pm = it._pm = Object.assign(newPM(), {custId: cust.id});
+  const used = d._type === 'outer' ? ['outer'] : d._type === 'inner' ? ['inner'] : ['outer', 'inner'];
+  for (const slot of used) {
+    if (!it._photo[slot] || d._pm[slot].prod) continue;
+    const size = slot === 'outer' ? d.outer_size : d.inner_size;
+    if (!sizeKey(size)) continue;
+    const kind = SLOT[slot].defKind, layer = SLOT[slot].defLayer;
+    const name = d._type === 'both' ? d.product + (slot === 'outer' ? ' 外箱' : ' 內盒') : d.product;
+    const mat = String((slot === 'outer' ? d.outer_material : d.inner_material) || '').replace(/\s*×\s*\d+張$/, '') || calcMat(size, kind, layer);
+    const r = await gasPost({action:'saveProduct', product:{'客戶ID':cust.id, '客戶名稱':cust.name, '品名':name, '其他寫法':'', '箱型':kind,
+      '尺寸':sizeKey(size).split('x').join('×'), '用紙':mat, '層數':String(layer), '紙色':/W$/i.test(name) ? '白' : '', '印刷':'有印', '備註':'接單附照片時新增'}});
+    if (!r.success) throw new Error('建立產品失敗：' + r.error);
+    (prodCache[cust.id] = prodCache[cust.id] || []).unshift(r.data);
+    d._pm[slot].prod = r.data;
+  }
+}
+async function uploadPending(d) {
+  const it = d._item; if (!it || !it._photo) return 0;
+  let n = 0;
+  for (const slot of ['outer', 'inner']) {
+    const img = it._photo[slot], p = d._pm && d._pm[slot].prod;
+    if (!img || !p) continue;
+    const r = await gasPost({action:'uploadPhoto', productId:p.產品ID, image:img});
+    if (!r.success) throw new Error(r.error);
+    p.照片 = r.data.photo; if (!p.印刷) p.印刷 = '有印';
+    photoCache[photoList(p)[0].id] = img;
+    it._photo[slot] = null; n++;
+  }
+  return n;
+}
 
 // ═══ 麥頭照片：讀取、顯示、放大 ═══
 const photoCache = {};
@@ -1506,7 +1576,7 @@ function fillForm(d){
   $('f_inner_mark').value=d.inner_mark||'';
   $('orderNoDisplay').textContent=d.order_no||'';
   setBoxType(d._type||guessType(d));
-  setTimeout(renderPrint);
+  setTimeout(()=>{ renderPrint(); renderMk(); });
 }
 
 function getFormData(){
@@ -1547,7 +1617,7 @@ function buildRows(d, id){
   const outerM=d.outer_material||calcMaterial(d.outer_size,'outer',d._pm);
   const innerM=d.inner_material||calcMaterial(d.inner_size,'inner',d._pm);
   const sch=getSchedChoice();
-  const base={action:'saveOrder', date:d.saved_at, customer:d.customer, delivery:d.delivery_date, notes:d.notes, orderNo:(d.order_no||'').trim(),
+  const base={action:'saveOrder', ...(sch.shipped?{status:'已出貨'}:{}), date:d.saved_at, customer:d.customer, delivery:d.delivery_date, notes:d.notes, orderNo:(d.order_no||'').trim(),
     schedDate:sch.date, rush:sch.date!==undefined||sch.rush?sch.rush:undefined};
   const pv = slot => printOf(d._item||null, slot).v;
   const outerRow={...base, ...prodExtra(d._pm,'outer'), print:pv('outer'), product:d.product, outerSize:d.outer_size, outerMaterial:outerM, outerQty:d.outer_qty,
@@ -1590,8 +1660,10 @@ $('saveBtn').addEventListener('click', async()=>{
   const isEdit = !!editingOrderId;
   showStatus('loading', isEdit ? '更新試算表中...' : '儲存到 Google 試算表...');
   try{
+    if(!isEdit) await ensureProducts(d);
     await postRows(buildRows(d, 'O'+Date.now()));
     markRecent(d.customer); if(!isEdit) markProductsUsed(d._pm); rememberPrint(d._item, d._pm);
+    if(!isEdit){ try{ const n=await uploadPending(d); if(n) showStatus('loading','麥頭照片已上傳…'); }catch(pe){ alert('訂單已存好，但麥頭照片上傳失敗：'+pe.message+'\n可以到「📷 出貨麥頭」補拍。'); } }
     if (isEdit) {
       showStatus('success','✓ 訂單已更新！');
       editingOrderId=null;
@@ -1619,19 +1691,21 @@ async function saveAll(){
   const todo=recognizedItems.map((it,i)=>i).filter(i=>!recognizedItems[i]._saved && !recognizedItems[i]._skip);
   if(!todo.length) return;
   $('saveAllBtn').disabled=true;
-  const ts=Date.now(); let done=0;
+  const ts=Date.now(); let done=0; const photoFails=[];
   try{
     for (const i of todo){
       showStatus('loading', `儲存中… ${done+1}/${todo.length}`);
       fillForm(recognizedItems[i]);
       const d={...getFormData(), customer:d0.customer, _pm:recognizedItems[i]._pm||null, _item:recognizedItems[i]};
+      await ensureProducts(d);
       await postRows(buildRows(d, 'O'+ts+'-'+(i+1)));
       markProductsUsed(d._pm); rememberPrint(d._item, d._pm);
+      try{ await uploadPending(d); }catch(pe){ photoFails.push(`第 ${i+1} 筆：${pe.message}`); }
       recognizedItems[i]._saved=true; done++;
     }
     markRecent(d0.customer);
     showRecognizedItem(todo[todo.length-1]);
-    showStatus('success', `✓ ${done} 筆都存好了${getSchedChoice().date?'，也排好程了':''}`);
+    showStatus(photoFails.length?'warning':'success', `✓ ${done} 筆都存好了${getSchedChoice().date?'，也排好程了':''}${photoFails.length?`。但有 ${photoFails.length} 張麥頭照片沒上傳成功（${photoFails.join('；')}），可以到「📷 出貨麥頭」補拍`:''}`);
   }catch(e){
     showRecognizedItem(todo[done]||recognizedIndex);
     showStatus('error', `存到第 ${done+1} 筆時失敗：${e.message}。已存好的 ${done} 筆不會重複存，再按一次「一起存」即可。`);
@@ -1658,10 +1732,11 @@ function getSchedChoice(){
   if(v==='today') date=ymd(t);
   else if(v==='tomorrow'){ t.setDate(t.getDate()+1); date=ymd(t); }
   else if(v==='pick') date=$('f_sched_date').value||undefined;
-  return {date, rush};
+  return {date, rush, shipped: v==='shipped'};
 }
 function resetSched(){
-  $('f_sched').value=''; $('f_rush').checked=false;
+  let pref=''; try{ pref=localStorage.getItem('schedPref')||''; }catch(e){}
+  $('f_sched').value = pref==='shipped' ? 'shipped' : ''; $('f_rush').checked=false;
   $('f_sched_date').style.display='none';
 }
 
