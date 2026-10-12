@@ -72,6 +72,10 @@ header .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11p
 .field input,.field textarea,.field select{width:100%;border:1px solid transparent;background:transparent;font-family:inherit;font-size:14px;font-weight:500;color:var(--ink);outline:none;resize:none;padding:2px 4px;margin:-2px -4px;border-radius:3px;transition:.15s}
 .field input:focus,.field textarea:focus,.field select:focus{border-color:var(--accent);background:var(--accent-light)}
 .field select{cursor:pointer}
+.sched-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.sched-row select,.sched-row input[type=date]{border:1px solid var(--border)!important;padding:6px 8px!important;margin:0!important;width:auto!important;background:#fff!important}
+.rush-check{display:inline-flex!important;align-items:center;gap:6px;font-size:14px!important;font-weight:700!important;color:var(--accent)!important;letter-spacing:0!important;margin:0!important;text-transform:none!important}
+.rush-check input{width:18px!important;height:18px!important;margin:0!important}
 .customer-match{background:var(--success-light);border:1px solid #a5d6a7;border-radius:4px;padding:8px 12px;font-size:12px;color:var(--success);margin-bottom:12px;display:none}
 .customer-match.show{display:flex;align-items:center;gap:8px}
 .mark-loaded{background:var(--warning-light);border:1px solid #f6cc7a;border-radius:4px;padding:8px 12px;font-size:12px;color:var(--warning);margin-bottom:12px;display:none}
@@ -203,6 +207,19 @@ tr:hover td{background:var(--accent-light)}
       <div class="field full"><label>正嘜 Front Mark（變數用 [變數名] 標記）</label><textarea id="f_front_mark" rows="5" placeholder="－"></textarea></div>
       <div class="field full"><label>側嘜 Side Mark（變數用 [變數名] 標記）</label><textarea id="f_side_mark" rows="5" placeholder="－"></textarea></div>
       <div class="field full"><label>內盒印刷（有填＝內盒要經過印刷站）</label><textarea id="f_inner_mark" rows="3" placeholder="－"></textarea></div>
+      <div class="field full sched-field">
+        <label>排程（存檔時一起排好）</label>
+        <div class="sched-row">
+          <select id="f_sched" onchange="document.getElementById('f_sched_date').style.display=this.value==='pick'?'inline-block':'none'">
+            <option value="">先不排</option>
+            <option value="today">排今天</option>
+            <option value="tomorrow">排明天</option>
+            <option value="pick">選日期…</option>
+          </select>
+          <input type="date" id="f_sched_date" style="display:none">
+          <label class="rush-check"><input type="checkbox" id="f_rush"> 急件</label>
+        </div>
+      </div>
       <div class="field full"><label>印刷 / 特殊備注</label><textarea id="f_notes" rows="3" placeholder="－"></textarea></div>
     </div>
   </div>
@@ -469,6 +486,7 @@ function editOrder(orderId) {
   const r = orderRows.find(x => x[0] === orderId);
   if (!r) return;
   editingOrderId = orderId;
+  resetSched();
   fileBase64 = null; fileInput.value = '';
   recognizedItems = []; recognizedIndex = 0;
   document.getElementById('multiNav').classList.remove('show');
@@ -519,6 +537,7 @@ uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.r
 fileInput.addEventListener('change',()=>{if(fileInput.files[0])handleFile(fileInput.files[0])});
 
 function handleFile(file){
+  resetSched();
   editingOrderId=null;
   recognizedItems=[]; recognizedIndex=0;
   document.getElementById('multiNav').classList.remove('show');
@@ -647,7 +666,9 @@ document.getElementById('saveBtn').addEventListener('click', async()=>{
     // Calc materials
     const outerM=d.outer_material||calcMaterial(d.outer_size,'outer');
     const innerM=d.inner_material||calcMaterial(d.inner_size,'inner');
-    const base={action:'saveOrder', date:d.saved_at, customer:d.customer, delivery:d.delivery_date, notes:d.notes};
+    const sch=getSchedChoice();
+    const base={action:'saveOrder', date:d.saved_at, customer:d.customer, delivery:d.delivery_date, notes:d.notes,
+      schedDate:sch.date, rush:sch.date!==undefined||sch.rush?sch.rush:undefined};
     const outerRow={...base, product:d.product, outerSize:d.outer_size, outerMaterial:outerM, outerQty:d.outer_qty,
       innerSize:'', innerMaterial:'', innerQty:'', frontMark:d.front_mark, sideMark:d.side_mark};
     const innerRow={...base, product:d.product, outerSize:'', outerMaterial:'', outerQty:'',
@@ -696,6 +717,21 @@ function normDate(v, ref){
   const r=(ref||'').match(/^(\d{4})\/(\d{1,2})\//);
   if(r){ y=+r[1]; if(+m[1]<+r[2]) y++; }
   return `${y}/${+m[1]}/${+m[2]}`;
+}
+
+// ── 排程選項 → 日期字串（yyyy-mm-dd）；「先不排」回傳 undefined，不動原本的排程 ──
+function ymd(dt){return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');}
+function getSchedChoice(){
+  const v=document.getElementById('f_sched').value, rush=document.getElementById('f_rush').checked;
+  const t=new Date(); let date;
+  if(v==='today') date=ymd(t);
+  else if(v==='tomorrow'){ t.setDate(t.getDate()+1); date=ymd(t); }
+  else if(v==='pick') date=document.getElementById('f_sched_date').value||undefined;
+  return {date, rush};
+}
+function resetSched(){
+  document.getElementById('f_sched').value=''; document.getElementById('f_rush').checked=false;
+  document.getElementById('f_sched_date').style.display='none';
 }
 
 // ── Material Calc ──

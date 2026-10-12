@@ -21,12 +21,16 @@ function doPost(e) {
         data.delivery, data.frontMark, data.sideMark,
         data.notes, status
       ];
+      let rowNo;
       if (rowIndex >= 0) {
-        sheet.getRange(rowIndex + 1, 1, 1, rowData.length).setValues([rowData]);
-        return ok('訂單已更新');
+        rowNo = rowIndex + 1;
+        sheet.getRange(rowNo, 1, 1, rowData.length).setValues([rowData]);
+      } else {
+        sheet.appendRow(rowData);
+        rowNo = sheet.getLastRow();
       }
-      sheet.appendRow(rowData);
-      return ok('訂單已儲存');
+      writeSchedule(sheet, rowNo, data.schedDate, data.rush);
+      return ok(rowIndex >= 0 ? '訂單已更新' : '訂單已儲存');
     }
 
     if (action === 'saveCustomer') {
@@ -49,6 +53,10 @@ function doPost(e) {
         }
       }
       return ok('狀態已更新');
+    }
+
+    if (action === 'setSchedule') {
+      return ok(setSchedule(data.orderId, data.schedDate, data.rush));
     }
 
     if (action === 'updateStation') {
@@ -141,6 +149,10 @@ function doGet(e) {
   }
   if (action === 'getBoard') {
     try { return ok(getBoard(e.parameter.date)); }
+    catch (err) { return ContentService.createTextOutput(JSON.stringify({success:false, error:err.message})).setMimeType(ContentService.MimeType.JSON); }
+  }
+  if (action === 'getSchedule') {
+    try { return ok(getSchedule()); }
     catch (err) { return ContentService.createTextOutput(JSON.stringify({success:false, error:err.message})).setMimeType(ContentService.MimeType.JSON); }
   }
   if (action === 'getOrders') {
@@ -259,6 +271,13 @@ function getBoard(date) {
     if (date) { if (sched !== date) continue; }
     else if (sched > today || /已出貨|已取消/.test(status) || String(b[11]).indexOf('完成') === 0) continue;
 
+    out.push(buildOrder(r, b, sched));
+  }
+  return out;
+}
+
+// 一列試算表 → 看板用的訂單資料
+function buildOrder(r, b, sched) {
     const isInner = !r[4] && !!r[7];
     const size = String(r[4] || r[7] || '');
     const qty = String(r[6] || r[9] || '');
@@ -278,16 +297,59 @@ function getBoard(date) {
       if (v.indexOf('完成') === 0) prog[k] = 'done';
       else if (v.indexOf('進行中') === 0) prog[k] = 'doing';
     });
-    out.push({
+    return {
       no: String(r[0]), cust: String(r[2] || ''), prod: String(r[3] || ''),
       size: size, qty: qty, due: shortDate(r[10]), dueKey: fmtDate(r[10]),
       flute: String(b[0] || ''), layer: layer, kind: kind,
       material: String(r[isInner ? 8 : 5] || '') || calcMaterial(size, layer, kind),
       rush: isYes(b[5]), sched: sched, note: String(r[13] || ''),
       route: route, prog: prog, copies: Number(b[12]) || 1
-    });
+    };
+}
+
+// ── 排程看板：所有還沒出貨的單（含還沒排程的） ──
+function getSchedule() {
+  const rows = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('訂單紀錄').getDataRange().getValues();
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    while (r.length < BOARD_START - 1 + BOARD_COLS.length) r.push('');
+    if (!r[0]) continue;
+    if (/已出貨|已取消/.test(String(r[14] || ''))) continue;
+    const b = r.slice(BOARD_START - 1);
+    if (String(b[11]).indexOf('完成') === 0) continue;
+    out.push(buildOrder(r, b, fmtDate(b[6])));
   }
   return out;
+}
+
+// 寫排程日期（'' = 取消排程）和急件；undefined 代表不動
+function writeSchedule(sheet, rowNo, schedDate, rush) {
+  if (schedDate !== undefined && schedDate !== null) {
+    const v = schedDate ? new Date(schedDate + 'T00:00:00+08:00') : '';
+    sheet.getRange(rowNo, BOARD_START + 6).setValue(v);
+  }
+  if (rush !== undefined && rush !== null) {
+    sheet.getRange(rowNo, BOARD_START + 5).setValue(rush ? '是' : '');
+  }
+}
+
+function setSchedule(orderId, schedDate, rush) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('訂單紀錄');
+    const ids = sh.getRange(1, 1, sh.getLastRow(), 1).getValues();
+    for (let i = 1; i < ids.length; i++) {
+      if (String(ids[i][0]) === String(orderId)) {
+        writeSchedule(sh, i + 1, schedDate, rush);
+        return '已排程';
+      }
+    }
+    throw new Error('找不到訂單：' + orderId);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ── 平板按「開始／完成」 ──
