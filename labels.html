@@ -71,6 +71,36 @@ h1{font-size:22px;margin:0;font-weight:900}
 
 <script>
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzXvT3OkQoOKZ2XmmrtFBKhxg9OuTCphL66klI1sJBeSqczxUuKhCZZKMdzzXN_AqJ3/exec';
+
+// ── 系統密碼：每台裝置第一次輸入，之後記住；密碼錯或換密碼會再問 ──
+(function () {
+  const K = 'boxSystemKey', orig = window.fetch.bind(window);
+  const get = () => { try { return localStorage.getItem(K) || ''; } catch (e) { return ''; } };
+  const put = v => { try { v ? localStorage.setItem(K, v) : localStorage.removeItem(K); } catch (e) {} };
+  window.fetch = async function (url, opt) {
+    if (typeof url !== 'string' || url.indexOf(GAS_URL) !== 0) return orig(url, opt);
+    let msg = '';
+    for (let t = 0; t < 3; t++) {
+      let key = get();
+      if (!key) {
+        key = (prompt((msg ? msg + '\n\n' : '') + '請輸入工廠系統密碼（這台裝置只要輸入一次）') || '').trim();
+        if (!key) throw new Error('沒有輸入密碼，無法讀取資料');
+        put(key);
+      }
+      let u = url, o = opt;
+      if (o && o.body) { const b = JSON.parse(o.body); b.key = key; o = Object.assign({}, o, {body: JSON.stringify(b)}); }
+      else u = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'key=' + encodeURIComponent(key);
+      const res = await orig(u, o);
+      let d = null; try { d = await res.clone().json(); } catch (e) { return res; }
+      if (!d || !d.auth) return res;
+      if (get() !== key) { t--; continue; }     // 別的請求剛換好新密碼，直接用新的再試
+      put('');
+      if (!/密碼錯誤/.test(d.error)) throw new Error(d.error);
+      msg = '❌ 密碼錯誤，請再輸入一次';
+    }
+    throw new Error('密碼錯誤');
+  };
+})();
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let orders = [], copies = {};

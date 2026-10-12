@@ -1,8 +1,28 @@
 const SHEET_ID = SpreadsheetApp.getActiveSpreadsheet().getId();
 
+// ═══ 系統密碼 ═══
+// 密碼存在「專案設定 → 指令碼屬性」的 APP_PASSWORD，不寫在程式碼裡
+// 連續錯 20 次會鎖 10 分鐘，避免被一直亂試
+function checkKey(k) {
+  const pass = PropertiesService.getScriptProperties().getProperty('APP_PASSWORD');
+  if (!pass) return '系統還沒設定密碼：請到 Apps Script「專案設定 → 指令碼屬性」新增 APP_PASSWORD';
+  const cache = CacheService.getScriptCache();
+  const fails = Number(cache.get('keyFails') || 0);
+  if (fails >= 20) return '密碼錯太多次，請 10 分鐘後再試';
+  if (String(k || '').trim() === String(pass).trim()) return '';
+  cache.put('keyFails', String(fails + 1), 600);
+  return '密碼錯誤';
+}
+function denied(msg) {
+  return ContentService.createTextOutput(JSON.stringify({success:false, auth:true, error:msg}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
+    const bad = checkKey(data.key);
+    if (bad) return denied(bad);
     const action = data.action;
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -164,7 +184,7 @@ function getProducts(custId, custName) {
     const r = v[i];
     if ((custId && String(r[ci]) === custId) || (custName && String(r[ni]) === custName)) {
       const o = {};
-      h.forEach((k, j) => { if (k) o[k] = cellText(r[j]); });
+      h.forEach((k, j) => { if (k && k !== '才單價' && k !== '工資') o[k] = cellText(r[j]); });   // 價格不送到網頁
       out.push(o);
     }
   }
@@ -311,6 +331,8 @@ function analyzeOrder(fileBase64, mediaType) {
 }
 
 function doGet(e) {
+  const bad = checkKey(e.parameter.key);
+  if (bad) return denied(bad);
   const action = e.parameter.action;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
