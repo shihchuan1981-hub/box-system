@@ -82,6 +82,10 @@ header .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11p
 .mark-loaded{background:var(--warning-light);border:1px solid #f6cc7a;border-radius:4px;padding:8px 12px;font-size:12px;color:var(--warning);margin-bottom:12px;display:none}
 .mark-loaded.show{display:flex;align-items:center;gap:8px}
 .multi-nav{background:var(--tag-bg);border:1px solid var(--border);border-radius:4px;padding:8px 12px;font-size:12px;color:var(--ink);margin-bottom:12px;display:none;align-items:center;justify-content:space-between}
+.type-switch{display:flex;gap:6px;flex-wrap:wrap}
+.type-switch button{font-family:inherit;font-size:13px;font-weight:700;padding:5px 12px;border:1.5px solid var(--border);border-radius:4px;background:#fff;color:var(--ink-light);cursor:pointer}
+.type-switch button.on{border-color:var(--ink);background:var(--ink);color:#fff}
+.fields-grid.t-outer .g-inner,.fields-grid.t-inner .g-outer{display:none}
 .multi-nav.show{display:flex;flex-wrap:wrap;gap:8px}
 .multi-nav > span:last-child{display:flex;gap:6px;flex-wrap:wrap}
 .item-chips{display:flex;flex-wrap:wrap;gap:4px;width:100%}
@@ -240,17 +244,24 @@ tr:hover td{background:var(--accent-light)}
       <div class="field"><label>訂貨日期</label><input id="f_order_date" placeholder="－"></div>
       <div class="field"><label>交貨日期</label><input id="f_delivery_date" placeholder="－"></div>
       <div class="field"><label>品名 / 型號</label><input id="f_product" placeholder="－"></div>
-      <div class="field"><label>外箱數量</label><input id="f_outer_qty" placeholder="－"></div>
-      <div class="field"><label>外箱尺寸（長×寬×高 台分）</label><input id="f_outer_size" class="mono" placeholder="171×129×73"></div>
-      <div class="field"><label>外箱用紙（空白＝自動算）</label><input id="f_outer_material" class="mono" placeholder="226×246 ×2張"></div>
-      <div class="field"><label>內盒數量</label><input id="f_inner_qty" placeholder="－"></div>
-      <div class="field"><label>內盒尺寸（長×寬×高 台分）</label><input id="f_inner_size" class="mono" placeholder="125×54×67"></div>
-      <div class="field"><label>內盒用紙（空白＝自動算）</label><input id="f_inner_material" class="mono" placeholder="122×233 ×2張"></div>
+      <div class="field"><label>這筆是</label>
+        <div class="type-switch" id="typeSwitch">
+          <button type="button" data-t="outer" onclick="setBoxType('outer')">外箱</button>
+          <button type="button" data-t="inner" onclick="setBoxType('inner')">內盒</button>
+          <button type="button" data-t="both" onclick="setBoxType('both')">外箱＋內盒</button>
+        </div>
+      </div>
+      <div class="field g-outer"><label>外箱數量</label><input id="f_outer_qty" placeholder="－"></div>
+      <div class="field g-outer"><label>外箱尺寸（長×寬×高 台分）</label><input id="f_outer_size" class="mono" placeholder="－"></div>
+      <div class="field g-outer"><label>外箱用紙（空白＝自動算）</label><input id="f_outer_material" class="mono" placeholder="－"></div>
+      <div class="field g-inner"><label>內盒數量</label><input id="f_inner_qty" placeholder="－"></div>
+      <div class="field g-inner"><label>內盒尺寸（長×寬×高 台分）</label><input id="f_inner_size" class="mono" placeholder="－"></div>
+      <div class="field g-inner"><label>內盒用紙（空白＝自動算）</label><input id="f_inner_material" class="mono" placeholder="－"></div>
       <div class="field"><label>條碼</label><input id="f_barcode" class="mono" placeholder="－"></div>
       <div class="field"><label>Item No.</label><input id="f_item_no" class="mono" placeholder="－"></div>
-      <div class="field full"><label>正嘜 Front Mark（變數用 [變數名] 標記）</label><textarea id="f_front_mark" rows="5" placeholder="－"></textarea></div>
-      <div class="field full"><label>側嘜 Side Mark（變數用 [變數名] 標記）</label><textarea id="f_side_mark" rows="5" placeholder="－"></textarea></div>
-      <div class="field full"><label>內盒印刷（有填＝內盒要經過印刷站）</label><textarea id="f_inner_mark" rows="3" placeholder="－"></textarea></div>
+      <div class="field full g-outer"><label>正嘜 Front Mark（變數用 [變數名] 標記）</label><textarea id="f_front_mark" rows="5" placeholder="－"></textarea></div>
+      <div class="field full g-outer"><label>側嘜 Side Mark（變數用 [變數名] 標記）</label><textarea id="f_side_mark" rows="5" placeholder="－"></textarea></div>
+      <div class="field full g-inner"><label>內盒印刷（有填＝內盒要經過印刷站）</label><textarea id="f_inner_mark" rows="3" placeholder="－"></textarea></div>
       <div class="field full sched-field">
         <label>排程（存檔時一起排好）</label>
         <div class="sched-row">
@@ -776,7 +787,11 @@ function editOrder(orderId) {
   $('f_front_mark').value = r[11]||'';
   $('f_side_mark').value = r[12]||'';
   $('f_notes').value = r[13]||'';
-  $('f_inner_mark').value = '';
+  // 內盒那列的印刷內容存在麥頭欄，編輯時放回「內盒印刷」
+  const t = guessType({outer_size:r[4],outer_qty:r[6],outer_material:r[5],inner_size:r[7],inner_qty:r[9],inner_material:r[8]});
+  $('f_inner_mark').value = t==='inner' ? (r[11]||'') : '';
+  if (t==='inner') $('f_front_mark').value = '';
+  setBoxType(t);
   $('orderNoDisplay').textContent = orderId;
 
   resultCard.classList.add('show');
@@ -872,11 +887,12 @@ function formToItem(){
     outer_material:$('f_outer_material').value, outer_sheets:'', inner_material:$('f_inner_material').value, inner_sheets:'',
     barcode:$('f_barcode').value, item_no:$('f_item_no').value,
     front_mark:$('f_front_mark').value, side_mark:$('f_side_mark').value,
-    inner_mark:$('f_inner_mark').value, notes:$('f_notes').value
+    inner_mark:$('f_inner_mark').value, notes:$('f_notes').value, _type:boxType
   });
 }
 function itemLabel(it){
-  const type = it.outer_size && it.inner_size ? '外+內' : it.inner_size ? '內盒' : '外箱';
+  const t = it._type||guessType(it);
+  const type = t==='both' ? '外+內' : t==='inner' ? '內盒' : '外箱';
   return `${type} ${it.product||it.item_no||'?'}`;
 }
 function renderChips(){
@@ -890,6 +906,20 @@ function skipItem(){
   const it=recognizedItems[recognizedIndex]; if(!it || it._saved) return;
   it._skip=!it._skip; renderChips();
   showStatus('success', it._skip ? `第 ${recognizedIndex+1} 筆標成「不要」，全部一起存時會跳過（再按一次可取消）` : `第 ${recognizedIndex+1} 筆恢復`);
+}
+
+// 這筆是外箱、內盒、還是兩個都有：只顯示該類型的欄位
+let boxType='both';
+function guessType(d){
+  const o=!!((d.outer_size||'')+(d.outer_qty||'')+(d.outer_material||'')).trim();
+  const i=!!((d.inner_size||'')+(d.inner_qty||'')+(d.inner_material||'')+(d.inner_mark||'')).trim();
+  return o&&i?'both':i?'inner':o?'outer':'both';
+}
+function setBoxType(t){
+  boxType=t;
+  const g=document.querySelector('.fields-grid');
+  g.classList.toggle('t-outer',t==='outer'); g.classList.toggle('t-inner',t==='inner');
+  document.querySelectorAll('#typeSwitch button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
 }
 
 function fillForm(d){
@@ -914,6 +944,7 @@ function fillForm(d){
   $('f_notes').value=d.notes||'';
   $('f_inner_mark').value=d.inner_mark||'';
   $('orderNoDisplay').textContent=d.order_no||'';
+  setBoxType(d._type||guessType(d));
 }
 
 function getFormData(){
@@ -939,6 +970,7 @@ function getFormData(){
     side_mark:$('f_side_mark').value,
     inner_mark:$('f_inner_mark').value.trim(),
     notes:$('f_notes').value,
+    _type:boxType,
     saved_at:new Date().toLocaleString('zh-TW')
   };
 }
@@ -946,6 +978,8 @@ function getFormData(){
 // ── Save Order ──
 // 一筆品項 → 要寫進試算表的列（外箱、內盒都有就拆兩列）
 function buildRows(d, id){
+  if (d._type==='outer') Object.assign(d,{inner_size:'',inner_qty:'',inner_material:'',inner_mark:''});
+  if (d._type==='inner') Object.assign(d,{outer_size:'',outer_qty:'',outer_material:'',front_mark:'',side_mark:''});
   const outerM=d.outer_material||calcMaterial(d.outer_size,'outer');
   const innerM=d.inner_material||calcMaterial(d.inner_size,'inner');
   const sch=getSchedChoice();
@@ -958,7 +992,8 @@ function buildRows(d, id){
   if (editingOrderId) {
     // 編輯舊訂單：照原本一列更新
     return [{...base, orderId:editingOrderId, product:d.product, outerSize:d.outer_size, outerMaterial:d.outer_size?outerM:'', outerQty:d.outer_qty,
-      innerSize:d.inner_size, innerMaterial:d.inner_size?innerM:'', innerQty:d.inner_qty, frontMark:d.front_mark, sideMark:d.side_mark}];
+      innerSize:d.inner_size, innerMaterial:(d.inner_size||d.inner_material)?innerM:'', innerQty:d.inner_qty,
+      frontMark:d._type==='inner'?d.inner_mark:d.front_mark, sideMark:d._type==='inner'?'':d.side_mark}];
   }
   const hasOuter=!!d.outer_size.trim();
   // 隔板這類沒有尺寸、只有用紙和數量的內盒品項，也算內盒
