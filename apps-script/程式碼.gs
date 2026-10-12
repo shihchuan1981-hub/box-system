@@ -42,6 +42,10 @@ function doPost(e) {
       return ok(saveProduct(data.product));
     }
 
+    if (action === 'setProductPrint') {
+      return ok(setProductPrint(data.productId, data.print));
+    }
+
     if (action === 'addAlias') {
       return ok(addAlias(data.productId, data.alias));
     }
@@ -212,6 +216,17 @@ function addAlias(id, alias) {
   return '已記住';
 }
 
+// 接單時老闆選了有印／不印，記回產品資料，下次就不用再選
+function setProductPrint(id, v) {
+  if (['有印', '不印'].indexOf(v) < 0) throw new Error('印刷只能是 有印 或 不印');
+  const sh = prodSheet();
+  const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  const col = h.indexOf('印刷') + 1, rowNo = findProductRow(sh, id);
+  if (col < 1 || rowNo < 0) return '找不到產品';
+  sh.getRange(rowNo, col).setValue(v);
+  return '已更新';
+}
+
 // 下單後更新最後出貨日、出貨次數（常做的產品才會排前面）
 function touchProduct(id) {
   const sh = prodSheet();
@@ -242,6 +257,7 @@ function analyzeOrder(fileBase64, mediaType) {
     '   有些訂單的內盒和外箱是「上下兩張分開的表格」，每一列是一個品項，內盒和外箱的列數、ITEM NO 不一定對得上。\n' +
     '   這種訂單請「每一列各輸出一個物件」，不要合併、不要漏：內盒表的列只填 inner_* 和 inner_mark（outer_* 全部留空），外箱表的列只填 outer_*、front_mark、side_mark（inner_* 全部留空），product 填那一列的 ITEM NO。例如內盒 6 列、外箱 8 列就輸出 14 個物件。\n' +
     '   合併儲存格：一個尺寸格往下跨好幾列時，跨到的每一列都用同一個尺寸；表格右邊手寫的用紙（例如「=212×291×2」）也套用到它旁邊那個尺寸跨到的每一列。\n' +
+    '   採購單格式（序號／品號／數量／單位／採購單價／金額）：「數量」欄才是數量（例如 15 PCS → 15），採購單價、金額、料號都不是數量。品名寫「外箱」就是外箱、「內盒」「內箱」就是內盒。\n' +
     '   外箱表的「訂單數量」那一欄是 outer_qty。同一列的 ITEM NO、QTY、N.W.、G.W.、CUFT 要填進那一列的 side_mark，例如「ITEM NO : 54925\\nQ\'TY : 10 EA\\nN.W. : 9.0 KGS\\nG.W. : 9.8 KGS\\nCUFT : 1.9」（單位照訂單側嘜區塊寫的 EA、PCS、KGS）。\n' +
     '   內盒表同一列的 ITEM NO、QTY 填進 inner_mark，例如「ITEM NO : 54332\\nQ\'TY : 10 EA」。「內盒數量」那格寫的是文字（例如「白色底有刀模」）時，inner_qty 留空，文字放 notes。\n' +
     '   表格最下面沒有 ITEM NO、但有數量和尺寸的列（例如「80」「(37+8)=45X168 三層隔板」）也要輸出一個物件：product 寫「三層隔板」這類說明，inner_qty 填數量，inner_material 填 45×168，inner_size 留空，notes 寫原文。\n' +

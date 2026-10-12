@@ -84,6 +84,8 @@ header .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11p
 .multi-nav{background:var(--tag-bg);border:1px solid var(--border);border-radius:4px;padding:8px 12px;font-size:12px;color:var(--ink);margin-bottom:12px;display:none;align-items:center;justify-content:space-between}
 .type-switch{display:flex;gap:6px;flex-wrap:wrap}
 .type-switch button{font-family:inherit;font-size:13px;font-weight:700;padding:5px 12px;border:1.5px solid var(--border);border-radius:4px;background:#fff;color:var(--ink-light);cursor:pointer}
+.pr-why{font-size:11px;color:var(--ink-light);margin-left:6px;align-self:center}
+.type-switch button.on.pr-yes{border-color:var(--accent);background:var(--accent)}
 .type-switch button.on{border-color:var(--ink);background:var(--ink);color:#fff}
 .fields-grid.t-outer .g-inner,.fields-grid.t-inner .g-outer{display:none}
 .multi-nav.show{display:flex;flex-wrap:wrap;gap:8px}
@@ -276,10 +278,12 @@ tr:hover td{background:var(--accent-light)}
       <div class="field g-outer"><label>外箱數量</label><input id="f_outer_qty" placeholder="－"></div>
       <div class="field g-outer"><label>外箱尺寸（長×寬×高 台分）</label><input id="f_outer_size" class="mono" placeholder="－"></div>
       <div class="field g-outer"><label>外箱用紙（空白＝自動算）</label><input id="f_outer_material" class="mono" placeholder="－"></div>
+      <div class="field g-outer"><label>外箱印刷（決定要不要排印刷站）</label><div class="type-switch" id="pr_outer"></div></div>
       <div class="field full pm g-inner" id="pm_inner" style="display:none"></div>
       <div class="field g-inner"><label>內盒數量</label><input id="f_inner_qty" placeholder="－"></div>
       <div class="field g-inner"><label>內盒尺寸（長×寬×高 台分）</label><input id="f_inner_size" class="mono" placeholder="－"></div>
       <div class="field g-inner"><label>內盒用紙（空白＝自動算）</label><input id="f_inner_material" class="mono" placeholder="－"></div>
+      <div class="field g-inner"><label>內盒印刷（決定要不要排印刷站）</label><div class="type-switch" id="pr_inner"></div></div>
       <div class="field"><label>條碼</label><input id="f_barcode" class="mono" placeholder="－"></div>
       <div class="field"><label>Item No.</label><input id="f_item_no" class="mono" placeholder="－"></div>
       <div class="field full g-outer"><label>正嘜 Front Mark（變數用 [變數名] 標記）</label><textarea id="f_front_mark" rows="5" placeholder="－"></textarea></div>
@@ -715,6 +719,7 @@ function candButtons(slot, list) {
 }
 
 function renderPM() {
+  renderPrint();
   ['outer', 'inner'].forEach(slot => {
     const el = $('pm_' + slot), st = pm[slot], L = SLOT[slot].label;
     const base = 'field full pm g-' + slot;
@@ -824,6 +829,52 @@ function rematchCurrent(fromName) {
 }
 ['f_outer_size', 'f_inner_size'].forEach(id => $(id).addEventListener('change', () => rematchCurrent(false)));
 $('f_product').addEventListener('change', () => rematchCurrent(true));
+
+// ═══ 印刷：有印／不印（排程時決定要不要經過印刷站） ═══
+// 沒選的話自動判斷：產品資料 → 訂單有麥頭或寫「印」→ 產品有照片／麥頭 → 都沒有就不印
+let editPrint = {outer:'', inner:''};      // 編輯舊訂單時用
+function printGuess(it, slot) {
+  const P = it && it._pm && it._pm[slot].prod;
+  if (P && P.印刷 === '有印') return {v:'是', why:'產品資料'};
+  if (P && P.印刷 === '不印') return {v:'否', why:'產品資料'};
+  const get = id => it ? tget(it, id) : $(id).value;
+  const marks = slot === 'outer' ? get('f_front_mark') + get('f_side_mark') : get('f_inner_mark');
+  if (marks.trim()) return {v:'是', why:'訂單有麥頭'};
+  if (/印/.test(get('f_product') + $('f_notes').value + (it ? (it.notes || '') : ''))) return {v:'是', why:'訂單有寫「印」'};
+  if (P && (P.照片 || P.正嘜 || P.側嘜)) return {v:'是', why:'產品有麥頭'};
+  return {v:'否', why:'沒看到印刷'};
+}
+function printOf(it, slot) {
+  const chosen = it ? it['print_' + slot] : editPrint[slot];
+  return chosen ? {v:chosen, why:'已選'} : printGuess(it, slot);
+}
+function renderPrint() {
+  const it = curItem();
+  ['outer', 'inner'].forEach(slot => {
+    const r = printOf(it, slot);
+    $('pr_' + slot).innerHTML =
+      `<button type="button" class="${r.v === '是' ? 'on pr-yes' : ''}" onclick="setPrint('${slot}','是')">🖨 有印</button>` +
+      `<button type="button" class="${r.v === '否' ? 'on' : ''}" onclick="setPrint('${slot}','否')">不印</button>` +
+      (r.why !== '已選' ? `<span class="pr-why">自動判斷：${r.why}</span>` : '');
+  });
+}
+function setPrint(slot, v) {
+  const it = curItem();
+  if (it) it['print_' + slot] = v; else editPrint[slot] = v;
+  renderPrint();
+}
+// 存檔後，把老闆選的印刷記回產品資料
+function rememberPrint(it, P) {
+  ['outer', 'inner'].forEach(slot => {
+    const p = P && P[slot] && P[slot].prod, chosen = it ? it['print_' + slot] : editPrint[slot];
+    if (!p || !chosen) return;
+    const v = chosen === '是' ? '有印' : '不印';
+    if (p.印刷 === v) return;
+    p.印刷 = v;
+    gasPost({action:'setProductPrint', productId:p.產品ID, print:v}).catch(() => {});
+  });
+}
+['f_front_mark', 'f_side_mark', 'f_inner_mark', 'f_notes', 'f_product'].forEach(id => $(id).addEventListener('input', () => renderPrint()));
 
 // ── Customer DB ──
 async function loadCustomers() {
@@ -1050,6 +1101,9 @@ function editOrder(orderId) {
   $('f_front_mark').value = r[11]||'';
   $('f_side_mark').value = r[12]||'';
   $('f_notes').value = r[13]||'';
+  // 試算表 R 欄（印刷）放回選項；空白就自動判斷
+  const pr = /^(是|y|yes|v|✓|1|true)$/i.test(String(r[17]||'').trim()) ? '是' : (/^(否|n|no|0|false)$/i.test(String(r[17]||'').trim()) ? '否' : '');
+  editPrint = {outer:pr, inner:pr};
   // 內盒那列的印刷內容存在麥頭欄，編輯時放回「內盒印刷」
   const t = guessType({outer_size:r[4],outer_qty:r[6],outer_material:r[5],inner_size:r[7],inner_qty:r[9],inner_material:r[8]});
   $('f_inner_mark').value = t==='inner' ? (r[11]||'') : '';
@@ -1212,6 +1266,7 @@ function fillForm(d){
   $('f_inner_mark').value=d.inner_mark||'';
   $('orderNoDisplay').textContent=d.order_no||'';
   setBoxType(d._type||guessType(d));
+  setTimeout(renderPrint);
 }
 
 function getFormData(){
@@ -1239,6 +1294,7 @@ function getFormData(){
     notes:$('f_notes').value,
     _type:boxType,
     _pm:(curItem()||{})._pm||null,
+    _item:curItem()||null,
     saved_at:new Date().toLocaleString('zh-TW')
   };
 }
@@ -1253,15 +1309,17 @@ function buildRows(d, id){
   const sch=getSchedChoice();
   const base={action:'saveOrder', date:d.saved_at, customer:d.customer, delivery:d.delivery_date, notes:d.notes, orderNo:(d.order_no||'').trim(),
     schedDate:sch.date, rush:sch.date!==undefined||sch.rush?sch.rush:undefined};
-  const outerRow={...base, ...prodExtra(d._pm,'outer'), product:d.product, outerSize:d.outer_size, outerMaterial:outerM, outerQty:d.outer_qty,
+  const pv = slot => printOf(d._item||null, slot).v;
+  const outerRow={...base, ...prodExtra(d._pm,'outer'), print:pv('outer'), product:d.product, outerSize:d.outer_size, outerMaterial:outerM, outerQty:d.outer_qty,
     innerSize:'', innerMaterial:'', innerQty:'', frontMark:d.front_mark, sideMark:d.side_mark};
-  const innerRow={...base, ...prodExtra(d._pm,'inner'), product:d.product, outerSize:'', outerMaterial:'', outerQty:'',
+  const innerRow={...base, ...prodExtra(d._pm,'inner'), print:pv('inner'), product:d.product, outerSize:'', outerMaterial:'', outerQty:'',
     innerSize:d.inner_size, innerMaterial:innerM, innerQty:d.inner_qty, frontMark:d.inner_mark, sideMark:''};
   if (editingOrderId) {
     // 編輯舊訂單：照原本一列更新
     return [{...base, orderId:editingOrderId, product:d.product, outerSize:d.outer_size, outerMaterial:d.outer_size?outerM:'', outerQty:d.outer_qty,
       innerSize:d.inner_size, innerMaterial:(d.inner_size||d.inner_material)?innerM:'', innerQty:d.inner_qty,
-      frontMark:d._type==='inner'?d.inner_mark:d.front_mark, sideMark:d._type==='inner'?'':d.side_mark}];
+      frontMark:d._type==='inner'?d.inner_mark:d.front_mark, sideMark:d._type==='inner'?'':d.side_mark,
+      print:editPrint[d._type==='inner'?'inner':'outer']||undefined}];
   }
   const hasOuter=!!d.outer_size.trim();
   // 隔板這類沒有尺寸、只有用紙和數量的內盒品項，也算內盒
@@ -1293,7 +1351,7 @@ $('saveBtn').addEventListener('click', async()=>{
   showStatus('loading', isEdit ? '更新試算表中...' : '儲存到 Google 試算表...');
   try{
     await postRows(buildRows(d, 'O'+Date.now()));
-    markRecent(d.customer); if(!isEdit) markProductsUsed(d._pm);
+    markRecent(d.customer); if(!isEdit) markProductsUsed(d._pm); rememberPrint(d._item, d._pm);
     if (isEdit) {
       showStatus('success','✓ 訂單已更新！');
       editingOrderId=null;
@@ -1326,9 +1384,9 @@ async function saveAll(){
     for (const i of todo){
       showStatus('loading', `儲存中… ${done+1}/${todo.length}`);
       fillForm(recognizedItems[i]);
-      const d={...getFormData(), customer:d0.customer, _pm:recognizedItems[i]._pm||null};
+      const d={...getFormData(), customer:d0.customer, _pm:recognizedItems[i]._pm||null, _item:recognizedItems[i]};
       await postRows(buildRows(d, 'O'+ts+'-'+(i+1)));
-      markProductsUsed(d._pm);
+      markProductsUsed(d._pm); rememberPrint(d._item, d._pm);
       recognizedItems[i]._saved=true; done++;
     }
     markRecent(d0.customer);
