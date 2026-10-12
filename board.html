@@ -20,6 +20,10 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);margin:0}
 .top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
 h1{font-size:20px;margin:0;font-weight:900}
 .meta{font-size:13px;color:var(--ink-2);display:flex;gap:12px;align-items:center}
+.meta a{font:inherit;padding:6px 12px;border:1px solid var(--line);background:var(--surface);border-radius:4px;color:var(--ink);text-decoration:none}
+.focus{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;background:#1a1714;color:#fff;border-radius:6px;padding:10px 14px}
+.focus b{font-size:17px}
+.focus button{font:inherit;font-size:14px;font-weight:700;padding:7px 14px;border-radius:5px;border:none;background:#fff;color:#1a1714;cursor:pointer}
 .meta button{font:inherit;padding:6px 12px;border:1px solid var(--line);background:var(--surface);border-radius:4px;cursor:pointer}
 .stations{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
 .st{font:inherit;font-size:17px;font-weight:700;padding:12px 4px;border:2px solid var(--line);background:var(--surface);color:var(--ink);border-radius:6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
@@ -69,7 +73,8 @@ button:focus-visible{outline:3px solid var(--warn);outline-offset:2px}
 table{width:100%;border-collapse:collapse;font-size:15px;min-width:680px}
 th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:center}
 th{font-size:12px;color:var(--ink-2)}
-td:first-child,th:first-child,td:nth-child(2),th:nth-child(2){text-align:left}
+td:first-child,th:first-child,td:nth-child(2),th:nth-child(2),td:nth-child(3),th:nth-child(3),td:nth-child(4),th:nth-child(4){text-align:left}
+.mono-s{font-family:var(--mono);font-size:14px;white-space:nowrap}
 tr:last-child td{border-bottom:none}
 .dot{display:inline-block;width:16px;height:16px;border-radius:50%;background:var(--chip);border:1px solid var(--line)}
 .dot.doing{background:var(--warn);border-color:var(--warn)}
@@ -82,9 +87,10 @@ tr:last-child td{border-bottom:none}
 <div class="wrap">
   <div class="top">
     <h1>工站看板</h1>
-    <div class="meta"><span id="updated">載入中…</span><button onclick="load()">重新整理</button></div>
+    <div class="meta"><span id="updated">載入中…</span><button onclick="load()">重新整理</button><a href="schedule.html">排程看板</a></div>
   </div>
   <nav class="stations" id="stations"></nav>
+  <div id="focusBar"></div>
   <div id="msg"></div>
   <section id="stationView">
     <div class="head"><h2 id="stTitle"></h2><div class="count" id="stCount"></div></div>
@@ -102,8 +108,12 @@ const LABEL = {todo:'待做', doing:'進行中', done:'完成'};
 const $ = id => document.getElementById(id);
 let orders = [];
 // 每台平板記住自己是哪一站（-1 = 全廠總覽）
+const params = new URLSearchParams(location.search);
+let focus = params.get('order') ? new Set(params.get('order').split(',')) : null;
+const focusTitle = params.get('title') || '';
 let cur = (() => {
-  const q = new URLSearchParams(location.search).get('station');
+  const q = params.get('station');
+  if (focus && q === null) return -1;          // 從排程看板點進來，先看全廠總覽
   if (q !== null && STATIONS.includes(q)) return STATIONS.indexOf(q);
   if (q === '全廠') return -1;
   try { const v = localStorage.getItem('station'); if (v !== null) return +v; } catch (e) {}
@@ -129,19 +139,24 @@ async function load() {
   render();
 }
 
-function pick(i) { cur = i; try { localStorage.setItem('station', i); } catch (e) {} render(); }
+function pick(i) { cur = i; if (!focus) { try { localStorage.setItem('station', i); } catch (e) {} } render(); }
+function clearFocus() { focus = null; history.replaceState(null, '', location.pathname); render(); }
+const shown = () => focus ? orders.filter(o => focus.has(o.no)) : orders;
 
 function render() {
+  const list = shown();
+  $('focusBar').innerHTML = focus ? `<div class="focus"><span>只看這張訂單：<b>${esc(focusTitle)}</b>（今天看板上有 ${list.length} 項）</span><button onclick="clearFocus()">看全部訂單</button></div>` : '';
+  if (focus && orders.length && !list.length) $('msg').innerHTML = '<div class="msg info">這張單沒有在今天的看板上：工站看板只顯示排在今天（和之前沒做完）的單。到排程看板按「整張排今天」就會出現。</div>';
   $('stations').innerHTML = STATIONS.map((n, i) => {
-    const c = orders.filter(o => o.route.includes(i) && stateOf(o, i) !== 'done').length;
+    const c = list.filter(o => o.route.includes(i) && stateOf(o, i) !== 'done').length;
     return `<button class="st" aria-pressed="${i === cur}" onclick="pick(${i})">${n}<small>${c} 張未完成</small></button>`;
-  }).join('') + `<button class="st" aria-pressed="${cur === -1}" onclick="pick(-1)">全廠<small>${orders.length} 張在做</small></button>`;
+  }).join('') + `<button class="st" aria-pressed="${cur === -1}" onclick="pick(-1)">全廠<small>${list.length} 張在做</small></button>`;
 
   $('stationView').hidden = cur === -1;
   $('overview').hidden = cur !== -1;
   if (cur === -1) return renderOverview();
 
-  const mine = orders.filter(o => o.route.includes(cur))
+  const mine = list.filter(o => o.route.includes(cur))
     .sort((a, b) => (stateOf(a, cur) === 'done') - (stateOf(b, cur) === 'done') || byPriority(a, b));
   const waiting = mine.filter(o => !readyFor(o, cur) && stateOf(o, cur) !== 'done').length;
   $('stTitle').textContent = STATIONS[cur];
@@ -172,11 +187,11 @@ function render() {
 }
 
 function renderOverview() {
-  $('ovHead').innerHTML = '<th>客戶</th><th>品名</th>' + STATIONS.map(n => `<th>${n}</th>`).join('') + '<th>交貨</th>';
-  const list = [...orders].sort(byPriority);
-  $('ovBody').innerHTML = list.length ? list.map(o => `<tr><td><b>${esc(o.cust)}</b>${o.rush ? ' <span class="pill rush">急</span>' : ''}</td><td>${esc(o.prod)}</td>${
+  $('ovHead').innerHTML = '<th>客戶</th><th>品名</th><th>尺寸</th><th>數量</th>' + STATIONS.map(n => `<th>${n}</th>`).join('') + '<th>交貨</th>';
+  const list = [...shown()].sort(byPriority);
+  $('ovBody').innerHTML = list.length ? list.map(o => `<tr><td><b>${esc(o.cust)}</b>${o.rush ? ' <span class="pill rush">急</span>' : ''}</td><td>${esc(o.prod)}</td><td class="mono-s">${esc(o.size)||'－'}</td><td>${esc(o.qty)||'－'}</td>${
     STATIONS.map((_, i) => o.route.includes(i) ? `<td><span class="dot ${stateOf(o, i)}" title="${LABEL[stateOf(o, i)]}"></span></td>` : '<td class="dash">—</td>').join('')
-  }<td>${esc(o.due)}</td></tr>`).join('') : `<tr><td colspan="8" style="padding:30px;text-align:center;color:var(--ink-2)">目前沒有排程的單。到試算表「訂單紀錄」填上排程日期就會出現。</td></tr>`;
+  }<td>${esc(o.due)}</td></tr>`).join('') : `<tr><td colspan="10" style="padding:30px;text-align:center;color:var(--ink-2)">目前沒有排程的單。到試算表「訂單紀錄」填上排程日期就會出現。</td></tr>`;
 }
 
 async function setState(no, state, btn) {

@@ -77,9 +77,13 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--warn);outline-offse
 .ono{font-family:var(--mono);font-size:14px;color:var(--ink-2);font-weight:600}
 .count{font-size:13px;color:var(--ink-2)}
 .prog{display:inline-flex;gap:4px;flex-wrap:wrap}
-.prog span{font-size:12px;padding:1px 6px;border-radius:3px;background:var(--chip);color:var(--ink-2);font-variant-numeric:tabular-nums}
-.prog span.part{background:var(--warn-soft);color:var(--warn);font-weight:700}
-.prog span.all{background:var(--ok);color:#fff;font-weight:700}
+.prog a{text-decoration:none}
+.prog a:hover{outline:2px solid var(--ink);outline-offset:1px}
+.golink{color:var(--ink);text-decoration:none;border-bottom:2px solid transparent}
+.golink:hover{border-bottom-color:var(--ink)}
+.prog span,.prog a{font-size:12px;padding:1px 6px;border-radius:3px;background:var(--chip);color:var(--ink-2);font-variant-numeric:tabular-nums}
+.prog .part{background:var(--warn-soft);color:var(--warn);font-weight:700}
+.prog .all{background:var(--ok);color:#fff;font-weight:700}
 .toggle{font:inherit;font-size:13px;color:var(--ink-2);background:none;border:none;padding:4px 0;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .items{border-top:1px solid var(--line);overflow-x:auto}
 .items table{width:100%;border-collapse:collapse;font-size:14px;min-width:640px}
@@ -200,6 +204,12 @@ function render(){
   $('later').innerHTML = later.length ? later.map(x => `<div class="day">${label(x.d)}</div><div class="list">${x.groups.map(g => card(g,'later')).join('')}</div>`).join('') : '<div class="empty">沒有</div>';
 }
 
+// 點進工站看板：只看這張訂單（可指定某一站）
+function boardLink(g, station){
+  const p = new URLSearchParams({ order: g.items.map(o => o.no).join(','), title: g.cust + (g.orderNo ? ' 單號 ' + g.orderNo : '') });
+  if (station) p.set('station', station);
+  return 'board.html?' + p.toString();
+}
 function card(g, where){
   const n = daysTo(g.dueKey);
   const st = status(g), dueCls = st === 'normal' ? '' : st;
@@ -211,7 +221,7 @@ function card(g, where){
   const prog = where === 'un' ? '' : `<span class="prog">${STATIONS.map((s,i) => {
       const need = g.items.filter(o => o.route.includes(i)); if(!need.length) return '';
       const done = need.filter(o => o.prog[i] === 'done').length;
-      return `<span class="${done===need.length?'all':done||need.some(o=>o.prog[i])?'part':''}">${s} ${done}/${need.length}</span>`; }).join('')}</span>`;
+      return `<a href="${boardLink(g, s)}" target="boardTab" title="打開${s}站的看板" class="${done===need.length?'all':done||need.some(o=>o.prog[i])?'part':''}">${s} ${done}/${need.length}</a>`; }).join('')}</span>`;
   const gid = where + '｜' + g.key, ids = JSON.stringify(g.items.map(o => o.no)).replace(/"/g,'&quot;');
   const dateBtn = `<button onclick="pickDate(this, ${ids})">${where==='un'?'選日期':'改日期'}</button>`;
   const rushBtn = `<button class="${g.rush?'rush-on':''}" onclick="rushGroup(${ids}, ${!g.rush})">${g.rush?'急件 ✓':'急件'}</button>`;
@@ -230,7 +240,7 @@ function card(g, where){
   return `<div class="order ${st==='bad'?'bad':st==='good'?'good':g.rush?'rush':''}">
     <div class="ohead">
       <div class="info">
-        <div class="l1"><span class="cust">${esc(g.cust)}</span>${g.orderNo?`<span class="ono">單號 ${esc(g.orderNo)}</span>`:''}
+        <div class="l1"><a class="cust golink" href="${boardLink(g)}" target="boardTab" title="打開工站看板，看這張單做到哪">${esc(g.cust)} ›</a>${g.orderNo?`<span class="ono">單號 ${esc(g.orderNo)}</span>`:''}
           ${g.rush?'<span class="pill rush">急件</span>':''}${carry}</div>
         <div class="l2"><span class="due ${dueCls}">交貨 ${esc(dueTxt)}${lateSched}</span><span class="count">${g.items.length} 項（${what}）</span>${prog}</div>
         ${g.items.length > 1 ? `<div><button class="toggle" onclick="toggle('${esc(gid)}')">${isOpen ? '收起品項 ▴' : `看 ${g.items.length} 個品項 ▾`}</button></div>` : ''}
