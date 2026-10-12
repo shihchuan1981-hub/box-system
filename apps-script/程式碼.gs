@@ -34,13 +34,11 @@ function doPost(e) {
     }
 
     if (action === 'saveCustomer') {
-      const sheet = ss.getSheetByName('客戶資料');
-      sheet.appendRow([
-        data.customerId, data.name, data.contact, data.phone,
-        data.fax, data.address, data.taxId, data.logoNote,
-        data.notes, data.frontMark, data.sideMark   // ← 新增麥頭欄位
-      ]);
-      return ok('客戶已儲存');
+      return ok(saveCustomer(data));
+    }
+
+    if (action === 'deleteCustomer') {
+      return ok(deleteCustomer(data.customerId, data.name));
     }
 
     if (action === 'updateOrderStatus') {
@@ -71,6 +69,62 @@ function doPost(e) {
     return ContentService
       .createTextOutput(JSON.stringify({success:false, error:err.message}))
       .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ═══ 客戶資料：新增／修改／刪除 ═══
+// 找客戶在第幾列：有客戶ID就用ID找；舊資料沒有ID的，用名稱找
+function findCustomerRow(sh, id, name) {
+  const rows = sh.getDataRange().getValues();
+  id = String(id || '').trim();
+  name = String(name || '').trim();
+  for (let i = 1; i < rows.length; i++) {
+    const rid = String(rows[i][0] || '').trim();
+    const rname = String(rows[i][1] || '').trim();
+    if (id ? rid === id : (!rid && rname === name)) return i + 1;
+  }
+  return -1;
+}
+
+// 編輯 → 改原本那一列；新增 → 加在最後一列
+function saveCustomer(d) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('客戶資料');
+    const rowData = [
+      d.customerId || ('C' + Date.now()), d.name, d.contact, d.phone,
+      d.fax, d.address, d.taxId, d.logoNote,
+      d.notes, d.frontMark, d.sideMark
+    ];
+    if (d.isEdit) {
+      const rowNo = findCustomerRow(sh, d.originalId, d.originalName);
+      if (rowNo < 0) throw new Error('找不到要修改的客戶「' + d.originalName + '」，可能已被刪除，請重新整理');
+      sh.getRange(rowNo, 1, 1, rowData.length).setValues([rowData]);
+      return '客戶已更新';
+    }
+    sh.appendRow(rowData);
+    return '客戶已儲存';
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function deleteCustomer(id, name) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('客戶資料');
+    const rowNo = findCustomerRow(sh, id, name);
+    if (rowNo < 0) throw new Error('找不到客戶「' + name + '」，可能已經刪除了');
+    // 再對一次名稱，避免刪錯
+    if (String(sh.getRange(rowNo, 2).getValue()).trim() !== String(name).trim()) {
+      throw new Error('客戶資料對不上，請重新整理後再刪');
+    }
+    sh.deleteRow(rowNo);
+    return '客戶已刪除';
+  } finally {
+    lock.releaseLock();
   }
 }
 

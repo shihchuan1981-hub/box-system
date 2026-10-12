@@ -51,6 +51,7 @@ header .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11p
 .btn-secondary{background:var(--tag-bg);color:var(--ink);border:1px solid var(--border)}.btn-secondary:hover{background:var(--border)}
 .btn-success{background:var(--success);color:#fff}.btn-success:hover{background:#1b5e20}
 .btn-warning{background:var(--warning);color:#fff}.btn-warning:hover{opacity:.85}
+.btn-danger{background:var(--surface);color:var(--accent);border:1px solid #ef9a9a}.btn-danger:hover{background:var(--accent-light)}
 .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
 .status-bar{display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:4px;font-size:13px;margin-bottom:14px}
 .status-bar.loading{background:#fff8e1;color:#795548;border:1px solid #ffe082}
@@ -59,9 +60,9 @@ header .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11p
 .status-bar.warning{background:var(--warning-light);color:var(--warning);border:1px solid #f6cc7a}
 .spinner{width:15px;height:15px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
 @keyframes spin{to{transform:rotate(360deg)}}
-.result-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:20px;display:none}
+.result-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;margin-bottom:20px;display:none}
 .result-card.show{display:block}
-.card-header{background:var(--ink);color:#fff;padding:11px 18px;display:flex;align-items:center;justify-content:space-between}
+.card-header{background:var(--ink);color:#fff;padding:11px 18px;display:flex;align-items:center;justify-content:space-between;border-radius:5px 5px 0 0}
 .card-header h2{font-size:13px;font-weight:500;letter-spacing:.05em}
 .order-no{font-family:'IBM Plex Mono',monospace;font-size:13px;color:#f5c518}
 .fields-grid{display:grid;grid-template-columns:1fr 1fr;gap:0}
@@ -82,6 +83,33 @@ header .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11p
 .mark-loaded.show{display:flex;align-items:center;gap:8px}
 .multi-nav{background:var(--tag-bg);border:1px solid var(--border);border-radius:4px;padding:8px 12px;font-size:12px;color:var(--ink);margin-bottom:12px;display:none;align-items:center;justify-content:space-between}
 .multi-nav.show{display:flex}
+/* 客戶搜尋框 */
+.cust-pick{position:relative}
+.field .cust-pick input{font-size:16px;font-weight:700;border:1.5px solid var(--border);background:#fff;padding:9px 40px 9px 12px;margin:0;border-radius:4px}
+.field .cust-pick input:focus{border-color:var(--accent);background:#fff}
+.field .cust-pick input.picked{border-color:var(--success);background:var(--success-light)}
+.cust-x{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:none;background:none;font-size:20px;color:var(--ink-light);cursor:pointer;display:none;border-radius:50%}
+.cust-x.show{display:block}
+.cust-x:hover{background:var(--tag-bg)}
+.cust-list{display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);z-index:30;background:#fff;border:1px solid var(--border);border-radius:6px;max-height:340px;overflow-y:auto;box-shadow:0 8px 20px rgba(0,0,0,.14)}
+.cust-list.show{display:block}
+.cust-head{padding:6px 12px;font-size:11px;color:var(--ink-light);background:var(--tag-bg);position:sticky;top:0}
+.cust-item{padding:11px 12px;cursor:pointer;border-bottom:1px solid var(--tag-bg);display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.cust-item:last-child{border-bottom:none}
+.cust-item:hover,.cust-item.hl{background:var(--accent-light)}
+.cust-item b{font-size:15px;font-weight:700}
+.cust-item b mark{background:#ffe9a8;color:inherit;border-radius:2px}
+.cust-item small{font-size:12px;color:var(--ink-light);white-space:nowrap}
+.cust-none{padding:14px 12px;font-size:13px;color:var(--ink-light)}
+.cust-suggest{background:var(--warning-light);border:1px solid #f6cc7a;border-radius:4px;padding:10px 12px;font-size:13px;color:var(--warning);margin-top:8px;display:none}
+.cust-suggest.show{display:block}
+.cust-suggest .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.cust-suggest button{font:inherit;font-size:14px;font-weight:700;padding:7px 12px;border:1.5px solid var(--warning);background:#fff;color:var(--ink);border-radius:4px;cursor:pointer}
+.cust-suggest button small{font-weight:400;color:var(--ink-light);margin-left:4px}
+.list-search{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.list-search input{flex:1;min-width:200px;font-family:inherit;font-size:16px;padding:9px 12px;border:1.5px solid var(--border);border-radius:4px;outline:none}
+.list-search input:focus{border-color:var(--accent)}
+.list-search span{font-size:12px;color:var(--ink-light)}
 table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden;font-size:13px}
 th{background:var(--tag-bg);padding:9px 12px;text-align:left;font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--ink-light);text-transform:uppercase;border-bottom:1px solid var(--border)}
 td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--ink)}
@@ -93,6 +121,7 @@ tr:hover td{background:var(--accent-light)}
 .history-section h3{font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--ink-light);text-transform:uppercase;margin-bottom:10px}
 /* Customer DB */
 .customer-form{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;margin-bottom:20px}
+.customer-form.editing{border:2px solid var(--warning);background:var(--warning-light)}
 .customer-form h3{font-size:14px;font-weight:700;margin-bottom:16px;color:var(--ink)}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
 .form-group{display:flex;flex-direction:column;gap:4px}
@@ -103,6 +132,8 @@ tr:hover td{background:var(--accent-light)}
 .form-group.full{grid-column:1/-1}
 .mark-preview{background:var(--tag-bg);border-radius:4px;padding:10px 12px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:pre-line;line-height:1.8;min-height:60px;margin-top:4px;color:var(--ink)}
 .var-hint{font-size:10px;color:var(--ink-light);margin-top:3px}
+.ops{display:flex;gap:6px;white-space:nowrap}
+@media (max-width:640px){.fields-grid,.form-grid{grid-template-columns:1fr}.field{border-right:none}}
 /* Print */
 @media print{
   @page{size:A4;margin:12mm 14mm}
@@ -187,10 +218,14 @@ tr:hover td{background:var(--accent-light)}
     </div>
     <div class="fields-grid">
       <div class="field full">
-        <label>客戶名稱</label>
-        <select id="f_customer_sel" onchange="onCustomerSelect()">
-          <option value="">── 選擇客戶 ──</option>
-        </select>
+        <label for="f_customer_q">客戶名稱（打名稱、電話或聯絡人都找得到）</label>
+        <div class="cust-pick">
+          <input id="f_customer_q" autocomplete="off" placeholder="打字搜尋客戶，例如：金岱、7712143、黃先生">
+          <input type="hidden" id="f_customer_sel">
+          <button type="button" class="cust-x" id="custX" aria-label="清除客戶" onclick="clearCustomer(true)">×</button>
+          <div class="cust-list" id="custList" role="listbox"></div>
+        </div>
+        <div class="cust-suggest" id="custSuggest"></div>
       </div>
       <div class="field"><label>訂單號碼</label><input id="f_order_no" class="mono" placeholder="－"></div>
       <div class="field"><label>訂貨日期</label><input id="f_order_date" placeholder="－"></div>
@@ -236,7 +271,7 @@ tr:hover td{background:var(--accent-light)}
 <!-- ══ TAB: 客戶資料庫 ══ -->
 <div class="tab-panel" id="tab-customers">
 <div class="container">
-  <div class="customer-form">
+  <div class="customer-form" id="custForm">
     <h3 id="custFormTitle">➕ 新增客戶</h3>
     <div class="form-grid">
       <div class="form-group"><label>客戶名稱 *</label><input id="c_name" placeholder="例：金岱交通器材有限公司"></div>
@@ -258,14 +293,18 @@ tr:hover td{background:var(--accent-light)}
       </div>
     </div>
     <div class="btn-row">
-      <button class="btn btn-success" onclick="saveCustomer()">☁ 儲存客戶資料</button>
-      <button class="btn btn-secondary" onclick="clearCustForm()">清除</button>
+      <button class="btn btn-success" id="custSaveBtn" onclick="saveCustomer()">☁ 儲存客戶資料</button>
+      <button class="btn btn-secondary" id="custClearBtn" onclick="clearCustForm()">清除</button>
     </div>
     <div id="custStatus" class="status-bar" style="display:none"></div>
   </div>
 
   <div class="history-section">
     <h3>客戶清單</h3>
+    <div class="list-search">
+      <input id="custSearch" placeholder="🔍 搜尋客戶名稱、電話、聯絡人…" oninput="renderCustomerList()" autocomplete="off">
+      <span id="custCount"></span>
+    </div>
     <div id="customerList"><div class="empty-state">載入中...</div></div>
   </div>
 </div>
@@ -292,10 +331,15 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbzXvT3OkQoOKZ2XmmrtFBKh
 let fileBase64 = null, fileType = null;
 let customers = []; // [{id,name,contact,phone,fax,address,taxId,logo,note,frontMark,sideMark}]
 let currentCustomer = null;
+let editingCust = null;   // 客戶資料庫正在編輯的那一家（null = 新增）
+let recent = {};          // 客戶名稱 → {last: 第幾筆訂單, count: 下過幾次單}
 let orderRows = [];
 let editingOrderId = null;
 let recognizedItems = [];
 let recognizedIndex = 0;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 // ── Tab ──
 function switchTab(tab) {
@@ -321,116 +365,324 @@ async function gasPost(payload) {
   return await res.json();
 }
 
+// ═══ 客戶搜尋（接單頁和客戶資料庫共用） ═══
+const norm = s => String(s ?? '').toLowerCase().replace(/[\s\-－_()（）#.,，、'’]/g, '');
+const digits = s => String(s ?? '').replace(/\D/g, '');
+
+// 打的字和這家客戶有多像：越高排越前面，0 = 不相關
+function custScore(c, q) {
+  const nq = norm(q); if (!nq) return 0;
+  const name = norm(c.name);
+  if (name === nq) return 100;
+  if (name.startsWith(nq)) return 90;
+  if (name.includes(nq)) return 80;
+  const dq = digits(q);
+  if (dq.length >= 3 && dq.length === nq.length && (digits(c.phone).includes(dq) || digits(c.fax).includes(dq))) return 70;
+  if (norm(String(c.id).replace(/^G-/i, '')) === nq) return 65;
+  if (norm(c.contact).includes(nq)) return 60;
+  if (nq.length >= 2 && [...nq].every(ch => name.includes(ch))) return 40;   // 打「金交通」也找得到金岱交通
+  return 0;
+}
+const recentRank = c => (recent[c.name] ? recent[c.name].last : 0);
+
+function searchCustomers(q, limit) {
+  return customers.map(c => ({c, s: custScore(c, q)}))
+    .filter(x => x.s > 0)
+    .sort((a, b) => b.s - a.s || recentRank(b.c) - recentRank(a.c) || a.c.name.length - b.c.name.length)
+    .slice(0, limit || 9999).map(x => x.c);
+}
+
+// 把打的字在名稱裡標黃
+function hilite(name, q) {
+  const nq = String(q || '').trim();
+  const i = nq ? name.indexOf(nq) : -1;
+  if (i < 0) return esc(name);
+  return esc(name.slice(0, i)) + '<mark>' + esc(name.slice(i, i + nq.length)) + '</mark>' + esc(name.slice(i + nq.length));
+}
+
+let listItems = [], hlIndex = -1;
+function renderPickList() {
+  const q = $('f_customer_q').value.trim();
+  const box = $('custList');
+  let head = '';
+  if (!customers.length) {
+    box.innerHTML = '<div class="cust-none">客戶資料還在載入，請稍等一下…</div>';
+    box.classList.add('show'); return;
+  }
+  if (!q) {
+    listItems = customers.filter(c => recent[c.name]).sort((a, b) => recentRank(b) - recentRank(a)).slice(0, 15);
+    head = listItems.length ? `最近下過單的客戶（共 ${customers.length} 家，打字可搜尋全部）` : `共 ${customers.length} 家客戶，請打字搜尋`;
+  } else {
+    listItems = searchCustomers(q, 40);
+    head = listItems.length ? `找到 ${listItems.length >= 40 ? '40 家以上' : listItems.length + ' 家'}` : '';
+  }
+  hlIndex = q && listItems.length ? 0 : -1;
+  box.innerHTML = (head ? `<div class="cust-head">${head}</div>` : '') +
+    (listItems.length
+      ? listItems.map((c, i) => `<div class="cust-item${i === hlIndex ? ' hl' : ''}" role="option" data-i="${i}"><b>${hilite(c.name, q)}</b><small>${esc(c.phone || c.contact || '')}</small></div>`).join('')
+      : (q ? `<div class="cust-none">找不到「${esc(q)}」。換個字試試，或到「客戶資料庫」新增。</div>` : ''));
+  box.classList.add('show');
+}
+function hidePickList() { $('custList').classList.remove('show'); }
+function moveHl(d) {
+  if (!listItems.length) return;
+  hlIndex = (hlIndex + d + listItems.length) % listItems.length;
+  document.querySelectorAll('#custList .cust-item').forEach((el, i) => el.classList.toggle('hl', i === hlIndex));
+  const el = document.querySelector('#custList .cust-item.hl'); if (el) el.scrollIntoView({block:'nearest'});
+}
+
+(function initPicker() {
+  const inp = $('f_customer_q');
+  inp.addEventListener('focus', () => { inp.select(); renderPickList(); });
+  inp.addEventListener('input', () => {
+    if (currentCustomer && inp.value !== currentCustomer.name) unpickCustomer();
+    renderPickList();
+  });
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); moveHl(1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); moveHl(-1); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (listItems[hlIndex]) { setCustomer(listItems[hlIndex].id, true); inp.blur(); } }
+    else if (e.key === 'Escape') { hidePickList(); inp.blur(); }
+  });
+  inp.addEventListener('blur', () => setTimeout(() => {
+    hidePickList();
+    if (currentCustomer && inp.value !== currentCustomer.name) inp.value = currentCustomer.name;
+  }, 150));
+  // 用 mousedown 選，才不會被 blur 搶先關掉清單
+  $('custList').addEventListener('mousedown', e => {
+    e.preventDefault();
+    const it = e.target.closest('.cust-item'); if (!it) return;
+    setCustomer(listItems[+it.dataset.i].id, true);
+    inp.blur();
+  });
+})();
+
+// 選定客戶。loadMarks=true 會把這家的麥頭範本帶進正嘜、側嘜
+function setCustomer(id, loadMarks) {
+  const c = customers.find(x => x.id === id); if (!c) return;
+  currentCustomer = c;
+  $('f_customer_sel').value = c.id;
+  $('f_customer_q').value = c.name;
+  $('f_customer_q').classList.add('picked');
+  $('custX').classList.add('show');
+  $('custSuggest').classList.remove('show');
+  hidePickList();
+  $('customerMatch').classList.add('show');
+  $('customerMatchText').textContent = `已選擇：${c.name}`;
+  if (loadMarks && (c.frontMark || c.sideMark)) {
+    $('f_front_mark').value = c.frontMark || '';
+    $('f_side_mark').value = c.sideMark || '';
+    $('markLoaded').classList.add('show');
+    $('markLoadedText').textContent = '麥頭範本已載入，請填入各 [變數] 的實際數值';
+  } else if (loadMarks) {
+    $('markLoaded').classList.remove('show');
+  }
+}
+// 取消已選的客戶，但保留打的字
+function unpickCustomer() {
+  currentCustomer = null;
+  $('f_customer_sel').value = '';
+  $('f_customer_q').classList.remove('picked');
+  $('custX').classList.toggle('show', !!$('f_customer_q').value);
+  $('customerMatch').classList.remove('show');
+  $('markLoaded').classList.remove('show');
+}
+function clearCustomer(focus) {
+  $('f_customer_q').value = '';
+  unpickCustomer();
+  $('custX').classList.remove('show');
+  $('custSuggest').classList.remove('show');
+  if (focus) $('f_customer_q').focus();
+}
+
+// ── AI 讀到的客戶名稱 → 找資料庫裡最像的 ──
+const SUFFIX = /(股份有限公司|有限公司|股份公司|股公司|企業社|實業社|工業社|事業|企業|實業|工業|國際|公司|工廠|廠|行|社)$/;
+function coreName(s) {
+  let t = norm(s);
+  for (let k = 0; k < 4; k++) {
+    const u = t.replace(SUFFIX, '');
+    if (u === t || u.length < 2) break;
+    t = u;
+  }
+  return t;
+}
+function bigrams(s) { const a = []; for (let i = 0; i < s.length - 1; i++) a.push(s.slice(i, i + 2)); return a.length ? a : [s]; }
+function nameSim(a, b) {
+  const x = coreName(a), y = coreName(b);
+  if (!x || !y) return 0;
+  if (x === y) return 100;
+  if (x.length >= 2 && y.length >= 2 && (x.includes(y) || y.includes(x))) return 85;
+  const A = bigrams(x), pool = bigrams(y); let hit = 0; const total = A.length + pool.length;
+  A.forEach(g => { const k = pool.indexOf(g); if (k >= 0) { hit++; pool.splice(k, 1); } });
+  // 再比一個字一個字：AI 看錯一個字（星麒→星騏）也能列出來給老闆點
+  const cs = [...y]; let same = 0;
+  [...x].forEach(ch => { const k = cs.indexOf(ch); if (k >= 0) { same++; cs.splice(k, 1); } });
+  return Math.round(70 * Math.max(2 * hit / total, 0.9 * 2 * same / (x.length + y.length)));
+}
+
+function autoMatchCustomer(name) {
+  name = String(name || '').trim();
+  if (!name || !customers.length) return;
+  const ranked = customers.map(c => ({c, s: nameSim(name, c.name)}))
+    .filter(x => x.s >= 30)
+    .sort((a, b) => b.s - a.s || recentRank(b.c) - recentRank(a.c));
+  const top = ranked[0];
+  // 只有一家明顯最像，才自動選；好幾家一樣像就讓老闆點
+  if (top && top.s >= 85 && (!ranked[1] || ranked[1].s < top.s)) { setCustomer(top.c.id, true); return; }
+  const box = $('custSuggest');
+  if (ranked.length) {
+    box.innerHTML = `AI 讀到客戶「<b>${esc(name)}</b>」，請點正確的那一家：<div class="chips">${
+      ranked.slice(0, 5).map(x => `<button type="button" onclick="setCustomer('${esc(x.c.id).replace(/\\/g,'\\\\')}', true)">${esc(x.c.name)}${x.c.phone ? `<small>${esc(x.c.phone)}</small>` : ''}</button>`).join('')
+    }</div>`;
+  } else {
+    box.innerHTML = `AI 讀到客戶「<b>${esc(name)}</b>」，資料庫裡找不到。請在上面打字搜尋，新客戶請先到「客戶資料庫」新增。`;
+    $('f_customer_q').value = name;
+    $('custX').classList.add('show');
+  }
+  box.classList.add('show');
+}
+
 // ── Customer DB ──
 async function loadCustomers() {
-  document.getElementById('customerList').innerHTML = '<div class="empty-state">載入中...</div>';
+  if (!customers.length) $('customerList').innerHTML = '<div class="empty-state">載入中...</div>';
   try {
     const rows = await gasGet('getCustomers');
     customers = [];
-    if (rows.length > 1) {
-      rows.slice(1).forEach(r => {
-        if (r[1]) customers.push({id:r[0],name:r[1],contact:r[2],phone:r[3],fax:r[4],address:r[5],taxId:r[6],logo:r[7],note:r[8],frontMark:r[9]||'',sideMark:r[10]||''});
+    rows.slice(1).forEach((r, i) => {
+      if (String(r[1] || '').trim()) customers.push({
+        id: String(r[0] || ''), name: String(r[1]).trim(), contact: String(r[2] || ''), phone: String(r[3] || ''),
+        fax: String(r[4] || ''), address: String(r[5] || ''), taxId: String(r[6] || ''), logo: String(r[7] || ''),
+        note: String(r[8] || ''), frontMark: String(r[9] || ''), sideMark: String(r[10] || '')
       });
-    }
+    });
     renderCustomerList();
-    refreshCustomerSelect();
+    // 已選的客戶資料可能被改過，重新對一次
+    if (currentCustomer) {
+      const c = customers.find(x => x.id === currentCustomer.id);
+      if (c) currentCustomer = c; else unpickCustomer();
+    }
   } catch(e) {
-    document.getElementById('customerList').innerHTML = `<div class="empty-state">載入失敗：${e.message}</div>`;
+    $('customerList').innerHTML = `<div class="empty-state">載入失敗：${esc(e.message)}</div>`;
   }
+}
+
+// 從訂單紀錄算出最近下過單的客戶，選單才能把常用的排前面
+async function loadRecent() {
+  try {
+    const rows = await gasGet('getOrders');
+    recent = {};
+    rows.slice(1).forEach((r, i) => {
+      const n = String(r[2] || '').trim(); if (!n) return;
+      const o = recent[n] || (recent[n] = {last: 0, count: 0});
+      o.last = i + 1; o.count++;
+    });
+  } catch(e) {}
 }
 
 function renderCustomerList() {
-  const el = document.getElementById('customerList');
-  if (!customers.length) { el.innerHTML = '<div class="empty-state">尚無客戶資料，請新增</div>'; return; }
+  const el = $('customerList');
+  if (!customers.length) { el.innerHTML = '<div class="empty-state">尚無客戶資料，請新增</div>'; $('custCount').textContent = ''; return; }
+  const q = $('custSearch').value.trim();
+  const list = q ? searchCustomers(q) : [...customers].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+  $('custCount').textContent = q ? `找到 ${list.length} 家／共 ${customers.length} 家` : `共 ${customers.length} 家`;
+  if (!list.length) { el.innerHTML = `<div class="empty-state">找不到「${esc(q)}」</div>`; return; }
   el.innerHTML = `<table>
     <thead><tr><th>客戶名稱</th><th>電話</th><th>聯絡人</th><th>正嘜範本</th><th>操作</th></tr></thead>
-    <tbody>${customers.map(c => `<tr>
-      <td><strong>${c.name}</strong></td>
-      <td>${c.phone||'－'}</td>
-      <td>${c.contact||'－'}</td>
-      <td style="font-size:11px;font-family:monospace;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(c.frontMark||'未設定').replace(/\n/g,' / ')}</td>
-      <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:11px" onclick="editCustomer('${c.id}')">編輯</button></td>
-    </tr>`).join('')}</tbody>
+    <tbody>${list.map(c => { const i = customers.indexOf(c); return `<tr>
+      <td><strong>${hilite(c.name, q)}</strong></td>
+      <td>${esc(c.phone) || '－'}</td>
+      <td>${esc(c.contact) || '－'}</td>
+      <td style="font-size:11px;font-family:monospace;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((c.frontMark || '未設定').replace(/\n/g, ' / '))}</td>
+      <td><div class="ops">
+        <button class="btn btn-secondary" style="padding:5px 12px;font-size:12px" onclick="editCustomer(${i})">編輯</button>
+        <button class="btn btn-danger" style="padding:5px 12px;font-size:12px" onclick="deleteCustomer(${i})">刪除</button>
+      </div></td>
+    </tr>`; }).join('')}</tbody>
   </table>`;
 }
 
-function refreshCustomerSelect() {
-  const sel = document.getElementById('f_customer_sel');
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">── 選擇客戶 ──</option>' + customers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-  if (cur) sel.value = cur;
-}
-
-function onCustomerSelect() {
-  const id = document.getElementById('f_customer_sel').value;
-  currentCustomer = customers.find(c => c.id === id) || null;
-  const matchEl = document.getElementById('customerMatch');
-  const markEl = document.getElementById('markLoaded');
-  if (currentCustomer) {
-    matchEl.classList.add('show');
-    document.getElementById('customerMatchText').textContent = `已選擇：${currentCustomer.name}`;
-    if (currentCustomer.frontMark || currentCustomer.sideMark) {
-      document.getElementById('f_front_mark').value = currentCustomer.frontMark || '';
-      document.getElementById('f_side_mark').value = currentCustomer.sideMark || '';
-      markEl.classList.add('show');
-      document.getElementById('markLoadedText').textContent = '麥頭範本已載入，請填入各 [變數] 的實際數值';
-    } else {
-      markEl.classList.remove('show');
-    }
-  } else {
-    matchEl.classList.remove('show');
-    markEl.classList.remove('show');
-  }
-}
-
 async function saveCustomer() {
-  const name = document.getElementById('c_name').value.trim();
+  const name = $('c_name').value.trim();
   if (!name) { alert('請填寫客戶名稱'); return; }
-  showCustStatus('loading','儲存中...');
+  const isEdit = !!editingCust;
+  showCustStatus('loading', isEdit ? '更新中...' : '儲存中...');
   const payload = {
     action:'saveCustomer',
-    customerId: 'C'+ Date.now(),
-    name, contact:document.getElementById('c_contact').value,
-    phone:document.getElementById('c_phone').value,
-    fax:document.getElementById('c_fax').value,
-    address:document.getElementById('c_address').value,
-    taxId:document.getElementById('c_taxid').value,
-    logoNote:document.getElementById('c_logo').value,
-    notes:document.getElementById('c_note').value,
-    frontMark:document.getElementById('c_front').value,
-    sideMark:document.getElementById('c_side').value
+    isEdit,
+    originalId: isEdit ? editingCust.id : '',
+    originalName: isEdit ? editingCust.name : '',
+    customerId: isEdit && editingCust.id ? editingCust.id : 'C' + Date.now(),
+    name, contact:$('c_contact').value,
+    phone:$('c_phone').value,
+    fax:$('c_fax').value,
+    address:$('c_address').value,
+    taxId:$('c_taxid').value,
+    logoNote:$('c_logo').value,
+    notes:$('c_note').value,
+    frontMark:$('c_front').value,
+    sideMark:$('c_side').value
   };
   try {
     const r = await gasPost(payload);
-    if (r.success) { showCustStatus('success','✓ 客戶資料已儲存到 Google 試算表！'); clearCustForm(); loadCustomers(); }
+    if (r.success) {
+      showCustStatus('success', isEdit ? `✓「${name}」已更新` : `✓「${name}」已新增到 Google 試算表`);
+      clearCustForm(true); loadCustomers();
+    }
     else showCustStatus('error','儲存失敗：'+r.error);
   } catch(e) { showCustStatus('error','儲存失敗：'+e.message); }
 }
 
-function editCustomer(id) {
-  const c = customers.find(x=>x.id===id);
+function editCustomer(i) {
+  const c = customers[i];
   if (!c) return;
-  document.getElementById('custFormTitle').textContent = '✏️ 編輯客戶：'+c.name;
-  document.getElementById('c_name').value = c.name||'';
-  document.getElementById('c_taxid').value = c.taxId||'';
-  document.getElementById('c_contact').value = c.contact||'';
-  document.getElementById('c_phone').value = c.phone||'';
-  document.getElementById('c_fax').value = c.fax||'';
-  document.getElementById('c_address').value = c.address||'';
-  document.getElementById('c_logo').value = c.logo||'';
-  document.getElementById('c_note').value = c.note||'';
-  document.getElementById('c_front').value = c.frontMark||'';
-  document.getElementById('c_side').value = c.sideMark||'';
-  window.scrollTo(0,0);
+  editingCust = c;
+  $('custForm').classList.add('editing');
+  $('custFormTitle').textContent = '✏️ 編輯客戶：' + c.name;
+  $('custSaveBtn').innerHTML = '☁ 更新這家客戶';
+  $('custClearBtn').textContent = '取消編輯';
+  $('c_name').value = c.name || '';
+  $('c_taxid').value = c.taxId || '';
+  $('c_contact').value = c.contact || '';
+  $('c_phone').value = c.phone || '';
+  $('c_fax').value = c.fax || '';
+  $('c_address').value = c.address || '';
+  $('c_logo').value = c.logo || '';
+  $('c_note').value = c.note || '';
+  $('c_front').value = c.frontMark || '';
+  $('c_side').value = c.sideMark || '';
+  $('custStatus').style.display = 'none';
+  window.scrollTo(0, 0);
 }
 
-function clearCustForm() {
-  ['c_name','c_taxid','c_contact','c_phone','c_fax','c_address','c_logo','c_note','c_front','c_side'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('custFormTitle').textContent='➕ 新增客戶';
+async function deleteCustomer(i) {
+  const c = customers[i];
+  if (!c) return;
+  if (!confirm(`確定要刪除「${c.name}」嗎？\n\n電話：${c.phone || '－'}\n聯絡人：${c.contact || '－'}\n\n刪除後會從試算表移除（舊的訂單紀錄不受影響）。`)) return;
+  showCustStatus('loading', `刪除「${c.name}」中...`);
+  window.scrollTo(0, 0);
+  try {
+    const r = await gasPost({action:'deleteCustomer', customerId: c.id, name: c.name});
+    if (r.success) {
+      showCustStatus('success', `✓「${c.name}」已刪除`);
+      if (editingCust === c) clearCustForm(true);
+      if (currentCustomer && currentCustomer.id === c.id) clearCustomer();
+      loadCustomers();
+    } else showCustStatus('error', '刪除失敗：' + r.error);
+  } catch(e) { showCustStatus('error', '刪除失敗：' + e.message); }
+}
+
+function clearCustForm(keepStatus) {
+  ['c_name','c_taxid','c_contact','c_phone','c_fax','c_address','c_logo','c_note','c_front','c_side'].forEach(id => $(id).value = '');
+  editingCust = null;
+  $('custForm').classList.remove('editing');
+  $('custFormTitle').textContent = '➕ 新增客戶';
+  $('custSaveBtn').innerHTML = '☁ 儲存客戶資料';
+  $('custClearBtn').textContent = '清除';
+  if (keepStatus !== true) $('custStatus').style.display = 'none';
 }
 
 function showCustStatus(type,msg) {
-  const el=document.getElementById('custStatus');
+  const el=$('custStatus');
   el.className='status-bar '+type; el.style.display='flex';
   el.innerHTML=type==='loading'?`<div class="spinner"></div><span>${msg}</span>`:`<span>${msg}</span>`;
 }
@@ -440,96 +692,95 @@ async function loadOrders() {
   showOrdersStatus('loading','載入訂單紀錄...');
   try {
     const rows = await gasGet('getOrders');
-    const el = document.getElementById('ordersList');
+    const el = $('ordersList');
     if (rows.length<=1) { el.innerHTML='<div class="empty-state">尚無訂單紀錄</div>'; hideOrdersStatus(); return; }
     const data = rows.slice(1).filter(r=>r[0]);
     orderRows = data;
     el.innerHTML=`<table>
       <thead><tr><th>日期</th><th>客戶</th><th>品名</th><th>外箱尺寸</th><th>數量</th><th>交貨日期</th><th>狀態</th><th>操作</th></tr></thead>
       <tbody>${data.map(r=>`<tr>
-        <td style="font-size:11px">${r[1]||''}</td>
-        <td>${r[2]||''}</td>
-        <td style="font-size:12px">${r[3]||''}</td>
-        <td style="font-family:monospace;font-size:12px">${r[4]||''}</td>
-        <td>${r[6]||''}</td>
-        <td style="color:var(--accent);font-weight:600">${r[10]||''}</td>
-        <td><select onchange="changeOrderStatus('${r[0]}', this.value)" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;font-family:inherit">
+        <td style="font-size:11px">${esc(r[1])}</td>
+        <td>${esc(r[2])}</td>
+        <td style="font-size:12px">${esc(r[3])}</td>
+        <td style="font-family:monospace;font-size:12px">${esc(r[4])}</td>
+        <td>${esc(r[6])}</td>
+        <td style="color:var(--accent);font-weight:600">${esc(r[10])}</td>
+        <td><select onchange="changeOrderStatus('${esc(r[0])}', this.value)" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;font-family:inherit">
           ${['待出貨','已出貨','已取消'].map(s=>`<option value="${s}" ${(r[14]||'待出貨')===s?'selected':''}>${s}</option>`).join('')}
         </select></td>
-        <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:11px" onclick="editOrder('${r[0]}')">編輯</button></td>
+        <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:11px" onclick="editOrder('${esc(r[0])}')">編輯</button></td>
       </tr>`).join('')}</tbody>
     </table>`;
     hideOrdersStatus();
 
-    document.getElementById('exportAllBtn').onclick = () => {
+    $('exportAllBtn').onclick = () => {
       const csv = [['訂單ID','日期','客戶','品名','外箱尺寸','外箱用料','數量','內箱尺寸','內箱用料','內箱數','交貨日','正嘜','側嘜','備注','狀態'].join(','),
-        ...data.map(r=>r.map(c=>`"${(c||'').toString().replace(/"/g,'""')}"`).join(','))].join('\n');
-      const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));
+        ...data.map(r=>r.slice(0,15).map(c=>`"${(c??'').toString().replace(/"/g,'""')}"`).join(','))].join('\n');
+      const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
       a.download=`訂單紀錄_${new Date().toLocaleDateString('zh-TW').replace(/\//g,'-')}.csv`; a.click();
     };
   } catch(e) { showOrdersStatus('error','載入失敗：'+e.message); }
 }
 
-function showOrdersStatus(type,msg){const el=document.getElementById('ordersStatus');el.className='status-bar '+type;el.style.display='flex';el.innerHTML=type==='loading'?`<div class="spinner"></div><span>${msg}</span>`:`<span>${msg}</span>`;}
-function hideOrdersStatus(){document.getElementById('ordersStatus').style.display='none';}
+function showOrdersStatus(type,msg){const el=$('ordersStatus');el.className='status-bar '+type;el.style.display='flex';el.innerHTML=type==='loading'?`<div class="spinner"></div><span>${msg}</span>`:`<span>${msg}</span>`;}
+function hideOrdersStatus(){$('ordersStatus').style.display='none';}
 
 async function changeOrderStatus(orderId, status) {
   try {
     const r = await gasPost({action:'updateOrderStatus', orderId, status});
     if (!r.success) { alert('更新失敗：'+r.error); loadOrders(); return; }
-    const row = orderRows.find(x=>x[0]===orderId);
+    const row = orderRows.find(x=>String(x[0])===orderId);
     if (row) row[14] = status;
   } catch(e) { alert('更新失敗：'+e.message); loadOrders(); }
 }
 
 function editOrder(orderId) {
-  const r = orderRows.find(x => x[0] === orderId);
+  const r = orderRows.find(x => String(x[0]) === orderId);
   if (!r) return;
   editingOrderId = orderId;
   resetSched();
   fileBase64 = null; fileInput.value = '';
   recognizedItems = []; recognizedIndex = 0;
-  document.getElementById('multiNav').classList.remove('show');
-  document.getElementById('uploadContent').innerHTML = `<div class="upload-icon">✏️</div><h3>編輯模式 — 訂單 ${orderId}</h3><p>不需要重新上傳圖片，直接修改下方欄位後儲存即可</p>`;
+  $('multiNav').classList.remove('show');
+  $('uploadContent').innerHTML = `<div class="upload-icon">✏️</div><h3>編輯模式 — 訂單 ${esc(orderId)}</h3><p>不需要重新上傳圖片，直接修改下方欄位後儲存即可</p>`;
   actionRow.style.display = 'none';
   hideStatus();
 
-  const match = customers.find(c => c.name === r[2]);
-  document.getElementById('f_customer_sel').value = match ? match.id : '';
-  currentCustomer = match || null;
-  document.getElementById('customerMatch').classList.toggle('show', !!match);
-  if (match) document.getElementById('customerMatchText').textContent = `已選擇：${match.name}`;
-  document.getElementById('markLoaded').classList.remove('show');
+  clearCustomer();
+  const match = customers.find(c => c.name === String(r[2] || '').trim());
+  if (match) setCustomer(match.id, false);
+  else if (r[2]) { $('f_customer_q').value = String(r[2]); $('custX').classList.add('show'); }
+  $('markLoaded').classList.remove('show');
 
-  document.getElementById('f_order_no').value = orderId;
-  document.getElementById('f_order_date').value = '';
-  document.getElementById('f_delivery_date').value = r[10]||'';
-  document.getElementById('f_product').value = r[3]||'';
-  document.getElementById('f_outer_qty').value = r[6]||'';
-  document.getElementById('f_outer_size').value = r[4]||'';
-  document.getElementById('f_inner_size').value = r[7]||'';
-  document.getElementById('f_outer_material').value = r[5]||'';
-  document.getElementById('f_inner_material').value = r[8]||'';
-  document.getElementById('f_inner_qty').value = r[9]||'';
-  document.getElementById('f_barcode').value = '';
-  document.getElementById('f_item_no').value = '';
-  document.getElementById('f_front_mark').value = r[11]||'';
-  document.getElementById('f_side_mark').value = r[12]||'';
-  document.getElementById('f_notes').value = r[13]||'';
-  document.getElementById('f_inner_mark').value = '';
-  document.getElementById('orderNoDisplay').textContent = orderId;
+  $('f_order_no').value = orderId;
+  $('f_order_date').value = '';
+  $('f_delivery_date').value = r[10]||'';
+  $('f_product').value = r[3]||'';
+  $('f_outer_qty').value = r[6]||'';
+  $('f_outer_size').value = r[4]||'';
+  $('f_inner_size').value = r[7]||'';
+  $('f_outer_material').value = r[5]||'';
+  $('f_inner_material').value = r[8]||'';
+  $('f_inner_qty').value = r[9]||'';
+  $('f_barcode').value = '';
+  $('f_item_no').value = '';
+  $('f_front_mark').value = r[11]||'';
+  $('f_side_mark').value = r[12]||'';
+  $('f_notes').value = r[13]||'';
+  $('f_inner_mark').value = '';
+  $('orderNoDisplay').textContent = orderId;
 
   resultCard.classList.add('show');
   saveRow.style.display = 'flex';
-  document.getElementById('saveBtn').innerHTML = '☁ 更新訂單';
+  $('saveBtn').innerHTML = '☁ 更新訂單';
   switchTab('scan');
 }
 
 // ── Upload & Analyze ──
-const uploadZone=document.getElementById('uploadZone'),fileInput=document.getElementById('fileInput');
-const statusBar=document.getElementById('statusBar'),actionRow=document.getElementById('actionRow');
-const analyzeBtn=document.getElementById('analyzeBtn'),resultCard=document.getElementById('resultCard');
-const saveRow=document.getElementById('saveRow');
+const uploadZone=$('uploadZone'),fileInput=$('fileInput');
+const statusBar=$('statusBar'),actionRow=$('actionRow');
+const analyzeBtn=$('analyzeBtn'),resultCard=$('resultCard');
+const saveRow=$('saveRow');
 
 uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.classList.add('drag')});
 uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('drag'));
@@ -540,25 +791,26 @@ function handleFile(file){
   resetSched();
   editingOrderId=null;
   recognizedItems=[]; recognizedIndex=0;
-  document.getElementById('multiNav').classList.remove('show');
-  document.getElementById('saveBtn').innerHTML='☁ 儲存到試算表';
+  $('multiNav').classList.remove('show');
+  $('saveBtn').innerHTML='☁ 儲存到試算表';
   const reader=new FileReader();
   reader.onload=e=>{
     const url=e.target.result;
     fileBase64=url.split(',')[1]; fileType=file.type;
-    document.getElementById('uploadContent').innerHTML=`<img src="${url}" class="preview-img"><p style="font-size:12px;color:var(--ink-light)">${file.name}</p>`;
+    $('uploadContent').innerHTML=`<img src="${url}" class="preview-img"><p style="font-size:12px;color:var(--ink-light)">${esc(file.name)}</p>`;
     actionRow.style.display='flex'; resultCard.classList.remove('show'); saveRow.style.display='none'; hideStatus();
   };
   reader.readAsDataURL(file);
 }
 
-document.getElementById('resetBtn').addEventListener('click',()=>{
+$('resetBtn').addEventListener('click',()=>{
   fileBase64=null; fileInput.value=''; editingOrderId=null;
   recognizedItems=[]; recognizedIndex=0;
-  document.getElementById('multiNav').classList.remove('show');
-  document.getElementById('saveBtn').innerHTML='☁ 儲存到試算表';
-  document.getElementById('uploadContent').innerHTML=`<div class="upload-icon">📄</div><h3>點擊上傳或拖曳訂單圖片</h3><p>支援 JPG、PNG、PDF（傳真掃描、拍照皆可）</p>`;
+  $('multiNav').classList.remove('show');
+  $('saveBtn').innerHTML='☁ 儲存到試算表';
+  $('uploadContent').innerHTML=`<div class="upload-icon">📄</div><h3>點擊上傳或拖曳訂單圖片</h3><p>支援 JPG、PNG、PDF（傳真掃描、拍照皆可）</p>`;
   actionRow.style.display='none'; resultCard.classList.remove('show'); saveRow.style.display='none'; hideStatus();
+  clearCustomer();
 });
 
 analyzeBtn.addEventListener('click', analyze);
@@ -572,7 +824,7 @@ async function analyze(){
     if(!r.success) throw new Error(r.error||'辨識失敗');
     recognizedItems=Array.isArray(r.data)?r.data:[r.data];
     editingOrderId=null;
-    document.getElementById('saveBtn').innerHTML='☁ 儲存到試算表';
+    $('saveBtn').innerHTML='☁ 儲存到試算表';
     showRecognizedItem(0);
     showStatus('success', recognizedItems.length>1 ? `✓ 辨識完成！共偵測到 ${recognizedItems.length} 筆品項，請逐筆確認後儲存。` : '✓ 辨識完成！請確認資料後儲存。');
     resultCard.classList.add('show'); saveRow.style.display='flex';
@@ -583,12 +835,15 @@ async function analyze(){
 function showRecognizedItem(idx){
   recognizedIndex=idx;
   const item=recognizedItems[idx];
+  // 同一張訂單的下一筆品項，客戶通常一樣，已經選好就不要重選
+  const keep = idx>0 && currentCustomer;
+  if (!keep) clearCustomer();
   fillForm(item);
-  autoMatchCustomer(item.customer||'');
-  const nav=document.getElementById('multiNav');
+  if (!keep) autoMatchCustomer(item.customer||'');
+  const nav=$('multiNav');
   if(recognizedItems.length>1){
     nav.classList.add('show');
-    document.getElementById('multiNavText').textContent=`辨識到 ${recognizedItems.length} 筆品項，目前顯示第 ${idx+1}/${recognizedItems.length} 筆`;
+    $('multiNavText').textContent=`辨識到 ${recognizedItems.length} 筆品項，目前顯示第 ${idx+1}/${recognizedItems.length} 筆`;
   } else {
     nav.classList.remove('show');
   }
@@ -596,74 +851,67 @@ function showRecognizedItem(idx){
 function prevItem(){ if(recognizedIndex>0) showRecognizedItem(recognizedIndex-1); }
 function nextItem(){ if(recognizedIndex<recognizedItems.length-1) showRecognizedItem(recognizedIndex+1); }
 
-function autoMatchCustomer(name){
-  if(!name||!customers.length) return;
-  const match=customers.find(c=>name.includes(c.name.slice(0,4))||c.name.includes(name.slice(0,4)))
-    || customers.find(c=>c.name && name.replace(/\s/g,'').includes(c.name.replace(/\s/g,'').slice(0,2)));
-  if(match){
-    document.getElementById('f_customer_sel').value=match.id;
-    onCustomerSelect();
-  }
-}
-
 function fillForm(d){
-  document.getElementById('f_order_no').value=d.order_no||'';
+  $('f_order_no').value=d.order_no||'';
   const od=normDate(d.order_date);
-  document.getElementById('f_order_date').value=od;
-  document.getElementById('f_delivery_date').value=normDate(d.delivery_date, od);
-  document.getElementById('f_product').value=d.product||'';
-  document.getElementById('f_outer_qty').value=d.outer_qty||'';
-  document.getElementById('f_outer_size').value=d.outer_size||'';
-  document.getElementById('f_inner_size').value=d.inner_size||'';
-  document.getElementById('f_inner_qty').value=d.inner_qty||'';
-  document.getElementById('f_outer_material').value=joinMaterial(d.outer_material,d.outer_sheets);
-  document.getElementById('f_inner_material').value=joinMaterial(d.inner_material,d.inner_sheets);
-  document.getElementById('f_barcode').value=d.barcode||'';
-  document.getElementById('f_item_no').value=d.item_no||'';
-  // Only fill mark if no customer template loaded
-  if(!currentCustomer){
-    document.getElementById('f_front_mark').value=d.front_mark||d.mark||'';
-    document.getElementById('f_side_mark').value=d.side_mark||'';
+  $('f_order_date').value=od;
+  $('f_delivery_date').value=normDate(d.delivery_date, od);
+  $('f_product').value=d.product||'';
+  $('f_outer_qty').value=d.outer_qty||'';
+  $('f_outer_size').value=d.outer_size||'';
+  $('f_inner_size').value=d.inner_size||'';
+  $('f_inner_qty').value=d.inner_qty||'';
+  $('f_outer_material').value=joinMaterial(d.outer_material,d.outer_sheets);
+  $('f_inner_material').value=joinMaterial(d.inner_material,d.inner_sheets);
+  $('f_barcode').value=d.barcode||'';
+  $('f_item_no').value=d.item_no||'';
+  // 先放 AI 讀到的麥頭；之後選到有範本的客戶會換成範本
+  if(!currentCustomer || !(currentCustomer.frontMark || currentCustomer.sideMark)){
+    $('f_front_mark').value=d.front_mark||d.mark||'';
+    $('f_side_mark').value=d.side_mark||'';
   }
-  document.getElementById('f_notes').value=d.notes||'';
-  document.getElementById('f_inner_mark').value=d.inner_mark||'';
-  document.getElementById('orderNoDisplay').textContent=d.order_no||'';
+  $('f_notes').value=d.notes||'';
+  $('f_inner_mark').value=d.inner_mark||'';
+  $('orderNoDisplay').textContent=d.order_no||'';
 }
 
 function getFormData(){
-  const custId=document.getElementById('f_customer_sel').value;
+  const custId=$('f_customer_sel').value;
   const cust=customers.find(c=>c.id===custId);
   return {
-    customer:cust?cust.name:(document.getElementById('f_customer_sel').options[document.getElementById('f_customer_sel').selectedIndex]?.text||''),
+    customer:cust?cust.name:'',
+    customerTyped:$('f_customer_q').value.trim(),
     customerId:custId,
-    order_no:document.getElementById('f_order_no').value,
-    order_date:document.getElementById('f_order_date').value,
-    delivery_date:document.getElementById('f_delivery_date').value,
-    product:document.getElementById('f_product').value,
-    outer_qty:document.getElementById('f_outer_qty').value,
-    outer_size:document.getElementById('f_outer_size').value,
-    inner_size:document.getElementById('f_inner_size').value,
-    inner_qty:document.getElementById('f_inner_qty').value,
-    outer_material:document.getElementById('f_outer_material').value.trim(),
-    inner_material:document.getElementById('f_inner_material').value.trim(),
-    barcode:document.getElementById('f_barcode').value,
-    item_no:document.getElementById('f_item_no').value,
-    front_mark:document.getElementById('f_front_mark').value,
-    side_mark:document.getElementById('f_side_mark').value,
-    inner_mark:document.getElementById('f_inner_mark').value.trim(),
-    notes:document.getElementById('f_notes').value,
+    order_no:$('f_order_no').value,
+    order_date:$('f_order_date').value,
+    delivery_date:$('f_delivery_date').value,
+    product:$('f_product').value,
+    outer_qty:$('f_outer_qty').value,
+    outer_size:$('f_outer_size').value,
+    inner_size:$('f_inner_size').value,
+    inner_qty:$('f_inner_qty').value,
+    outer_material:$('f_outer_material').value.trim(),
+    inner_material:$('f_inner_material').value.trim(),
+    barcode:$('f_barcode').value,
+    item_no:$('f_item_no').value,
+    front_mark:$('f_front_mark').value,
+    side_mark:$('f_side_mark').value,
+    inner_mark:$('f_inner_mark').value.trim(),
+    notes:$('f_notes').value,
     saved_at:new Date().toLocaleString('zh-TW')
   };
 }
 
 // ── Save Order ──
-document.getElementById('saveBtn').addEventListener('click', async()=>{
+$('saveBtn').addEventListener('click', async()=>{
   const d=getFormData();
-  if(!d.customer||d.customer==='── 選擇客戶 ──'){alert('請先選擇客戶');return;}
+  if(!d.customer){
+    alert('請先選客戶：在「客戶名稱」打字搜尋，然後點清單裡的那一家。\n新客戶請先到「客戶資料庫」新增。');
+    $('f_customer_q').scrollIntoView({block:'center'}); $('f_customer_q').focus(); return;
+  }
   const isEdit = !!editingOrderId;
   showStatus('loading', isEdit ? '更新試算表中...' : '儲存到 Google 試算表...');
   try{
-    // Calc materials
     const outerM=d.outer_material||calcMaterial(d.outer_size,'outer');
     const innerM=d.inner_material||calcMaterial(d.inner_size,'inner');
     const sch=getSchedChoice();
@@ -691,10 +939,13 @@ document.getElementById('saveBtn').addEventListener('click', async()=>{
     let r;
     for (const row of rows) { r=await gasPost(row); if(!r.success) break; }
     if(r.success){
+      // 這家變成「最近下單」，下次打開選單就排在最前面
+      const n = Object.keys(recent).length + 1;
+      recent[d.customer] = {last: Math.max(n, ...Object.values(recent).map(o=>o.last+1)), count: ((recent[d.customer]||{}).count||0)+1};
       if (isEdit) {
         showStatus('success','✓ 訂單已更新！');
         editingOrderId=null;
-        document.getElementById('saveBtn').innerHTML='☁ 儲存到試算表';
+        $('saveBtn').innerHTML='☁ 儲存到試算表';
       } else {
         const savedNo=recognizedIndex+1, total=recognizedItems.length;
         if (total>1 && recognizedIndex<total-1) {
@@ -722,16 +973,16 @@ function normDate(v, ref){
 // ── 排程選項 → 日期字串（yyyy-mm-dd）；「先不排」回傳 undefined，不動原本的排程 ──
 function ymd(dt){return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');}
 function getSchedChoice(){
-  const v=document.getElementById('f_sched').value, rush=document.getElementById('f_rush').checked;
+  const v=$('f_sched').value, rush=$('f_rush').checked;
   const t=new Date(); let date;
   if(v==='today') date=ymd(t);
   else if(v==='tomorrow'){ t.setDate(t.getDate()+1); date=ymd(t); }
-  else if(v==='pick') date=document.getElementById('f_sched_date').value||undefined;
+  else if(v==='pick') date=$('f_sched_date').value||undefined;
   return {date, rush};
 }
 function resetSched(){
-  document.getElementById('f_sched').value=''; document.getElementById('f_rush').checked=false;
-  document.getElementById('f_sched_date').style.display='none';
+  $('f_sched').value=''; $('f_rush').checked=false;
+  $('f_sched_date').style.display='none';
 }
 
 // ── Material Calc ──
@@ -753,43 +1004,43 @@ function calcMaterial(size,type){
 }
 
 // ── Print ──
-document.getElementById('printBtn').addEventListener('click',()=>{
+$('printBtn').addEventListener('click',()=>{
   const d=getFormData();
   const now=new Date().toLocaleDateString('zh-TW');
   const outerM=d.outer_material||calcMaterial(d.outer_size,'outer');
   const innerM=d.inner_material||calcMaterial(d.inner_size,'inner');
-  document.getElementById('printArea').innerHTML=`
+  $('printArea').innerHTML=`
   <div class="po-sheet">
     <div class="po-top">
       <div><div class="po-title">生　產　工　單</div><div class="po-company">紙箱製造廠　｜　${now}</div></div>
       <div class="po-meta">
-        <div class="order-id">No. ${d.order_no||'－'}</div>
-        <div>交貨日期　<strong style="color:#c0392b;font-size:15px">${d.delivery_date||'－'}</strong></div>
-        <div>訂貨日期　${d.order_date||'－'}</div>
+        <div class="order-id">No. ${esc(d.order_no)||'－'}</div>
+        <div>交貨日期　<strong style="color:#c0392b;font-size:15px">${esc(d.delivery_date)||'－'}</strong></div>
+        <div>訂貨日期　${esc(d.order_date)||'－'}</div>
       </div>
     </div>
     <div class="po-grid">
-      <div class="po-cell span2"><div class="po-cell-label">客戶名稱</div><div class="po-cell-value big">${d.customer||'－'}</div></div>
-      <div class="po-cell"><div class="po-cell-label">品名 / 型號</div><div class="po-cell-value">${d.product||'－'}</div></div>
-      <div class="po-cell"><div class="po-cell-label">五層外箱（長×寬×高）</div><div class="po-cell-value mono big">${d.outer_size||'－'}</div></div>
-      <div class="po-cell"><div class="po-cell-label">外箱用紙（台分）</div><div class="po-cell-value mono big red">${outerM||'－'}</div></div>
-      <div class="po-cell"><div class="po-cell-label">外箱數量</div><div class="po-cell-value big red">${d.outer_qty||'－'}</div></div>
+      <div class="po-cell span2"><div class="po-cell-label">客戶名稱</div><div class="po-cell-value big">${esc(d.customer||d.customerTyped)||'－'}</div></div>
+      <div class="po-cell"><div class="po-cell-label">品名 / 型號</div><div class="po-cell-value">${esc(d.product)||'－'}</div></div>
+      <div class="po-cell"><div class="po-cell-label">五層外箱（長×寬×高）</div><div class="po-cell-value mono big">${esc(d.outer_size)||'－'}</div></div>
+      <div class="po-cell"><div class="po-cell-label">外箱用紙（台分）</div><div class="po-cell-value mono big red">${esc(outerM)||'－'}</div></div>
+      <div class="po-cell"><div class="po-cell-label">外箱數量</div><div class="po-cell-value big red">${esc(d.outer_qty)||'－'}</div></div>
       ${d.inner_size?`
-      <div class="po-cell"><div class="po-cell-label">內盒（長×寬×高）</div><div class="po-cell-value mono big">${d.inner_size}</div></div>
-      <div class="po-cell"><div class="po-cell-label">內盒用紙（台分）</div><div class="po-cell-value mono big" style="color:#b7770d">${innerM}</div></div>
-      <div class="po-cell"><div class="po-cell-label">內盒數量</div><div class="po-cell-value big">${d.inner_qty||'－'}</div></div>`:''}
-      <div class="po-cell"><div class="po-cell-label">Item No.</div><div class="po-cell-value mono">${d.item_no||'－'}</div></div>
-      <div class="po-cell span2"><div class="po-cell-label">條碼</div><div class="po-cell-value mono">${d.barcode||'－'}</div></div>
+      <div class="po-cell"><div class="po-cell-label">內盒（長×寬×高）</div><div class="po-cell-value mono big">${esc(d.inner_size)}</div></div>
+      <div class="po-cell"><div class="po-cell-label">內盒用紙（台分）</div><div class="po-cell-value mono big" style="color:#b7770d">${esc(innerM)}</div></div>
+      <div class="po-cell"><div class="po-cell-label">內盒數量</div><div class="po-cell-value big">${esc(d.inner_qty)||'－'}</div></div>`:''}
+      <div class="po-cell"><div class="po-cell-label">Item No.</div><div class="po-cell-value mono">${esc(d.item_no)||'－'}</div></div>
+      <div class="po-cell span2"><div class="po-cell-label">條碼</div><div class="po-cell-value mono">${esc(d.barcode)||'－'}</div></div>
     </div>
     <div class="po-mark-box">
       <div class="po-mark-header">▌ 麥頭內容（印刷稿）</div>
       <div class="po-mark-body">
-        <div class="po-mark-col"><div class="po-mark-col-title">正嘜 Front Mark</div><div class="po-mark-text">${d.front_mark||'－'}</div></div>
-        <div class="po-mark-col"><div class="po-mark-col-title">側嘜 Side Mark</div><div class="po-mark-text">${d.side_mark||'－'}</div></div>
-        ${d.inner_mark?`<div class="po-mark-col"><div class="po-mark-col-title">內盒印刷</div><div class="po-mark-text">${d.inner_mark}</div></div>`:''}
+        <div class="po-mark-col"><div class="po-mark-col-title">正嘜 Front Mark</div><div class="po-mark-text">${esc(d.front_mark)||'－'}</div></div>
+        <div class="po-mark-col"><div class="po-mark-col-title">側嘜 Side Mark</div><div class="po-mark-text">${esc(d.side_mark)||'－'}</div></div>
+        ${d.inner_mark?`<div class="po-mark-col"><div class="po-mark-col-title">內盒印刷</div><div class="po-mark-text">${esc(d.inner_mark)}</div></div>`:''}
       </div>
     </div>
-    ${d.notes?`<div class="po-notes-box"><div class="po-notes-label">特殊印刷要求 / 備注</div><div class="po-notes-text">${d.notes}</div></div>`:''}
+    ${d.notes?`<div class="po-notes-box"><div class="po-notes-label">特殊印刷要求 / 備注</div><div class="po-notes-text">${esc(d.notes)}</div></div>`:''}
     <div class="po-sign">
       <div class="po-sign-box">接單確認</div>
       <div class="po-sign-box">生產負責</div>
@@ -800,12 +1051,12 @@ document.getElementById('printBtn').addEventListener('click',()=>{
 });
 
 // ── Export CSV ──
-document.getElementById('exportBtn').addEventListener('click',()=>{
+$('exportBtn').addEventListener('click',()=>{
   const d=getFormData();
   const headers=['客戶','訂單號','訂貨日','交貨日','品名','外箱尺寸','外箱用料','外箱數','內箱尺寸','內箱用料','條碼','Item No.','正嘜','側嘜','備注'];
-  const vals=[d.customer,d.order_no,d.order_date,d.delivery_date,d.product,d.outer_size,d.outer_material||calcMaterial(d.outer_size,'outer'),d.outer_qty,d.inner_size,d.inner_material||calcMaterial(d.inner_size,'inner'),d.barcode,d.item_no,d.front_mark,d.side_mark,d.notes];
+  const vals=[d.customer||d.customerTyped,d.order_no,d.order_date,d.delivery_date,d.product,d.outer_size,d.outer_material||calcMaterial(d.outer_size,'outer'),d.outer_qty,d.inner_size,d.inner_material||calcMaterial(d.inner_size,'inner'),d.barcode,d.item_no,d.front_mark,d.side_mark,d.notes];
   const csv=[headers.join(','),vals.map(v=>`"${(v||'').replace(/"/g,'""')}"`).join(',')].join('\n');
-  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
   a.download=`訂單_${d.order_no||'draft'}_${new Date().toLocaleDateString('zh-TW').replace(/\//g,'-')}.csv`; a.click();
 });
 
@@ -814,23 +1065,24 @@ function hideStatus(){statusBar.style.display='none';}
 
 // ── Init ──
 loadCustomers();
+loadRecent();
 
 // ── PWA Install ──
 let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   deferredPrompt = e;
-  document.getElementById('installBtn').style.display = 'inline-block';
+  $('installBtn').style.display = 'inline-block';
 });
 async function installPWA() {
   if (!deferredPrompt) return;
   deferredPrompt.prompt();
-  const { outcome } = await deferredPrompt.userChoice;
+  await deferredPrompt.userChoice;
   deferredPrompt = null;
-  document.getElementById('installBtn').style.display = 'none';
+  $('installBtn').style.display = 'none';
 }
 window.addEventListener('appinstalled', () => {
-  document.getElementById('installBtn').style.display = 'none';
+  $('installBtn').style.display = 'none';
 });
 </script>
 </body>
