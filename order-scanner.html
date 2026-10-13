@@ -161,6 +161,20 @@ header .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11p
 .cam-btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:15px;font-weight:700;padding:10px 16px;border-radius:6px;background:var(--ink);color:#fff;cursor:pointer;border:none}
 .cam-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
 .cam-btn.busy{opacity:.5;pointer-events:none}
+/* 大的儲存鈕，固定在畫面下方 */
+#saveRow{position:sticky;bottom:0;z-index:20;background:var(--bg);padding:10px 0;margin-bottom:0;border-top:1px solid var(--border)}
+#saveBtn{flex:1 1 100%;justify-content:center;font-size:20px;font-weight:700;padding:18px 20px;border-radius:8px;min-height:64px}
+#saveBtn:disabled{background:#9e9e9e;cursor:wait}
+#saveBtn.done{background:#1b5e20}
+#printBtn,#exportBtn{flex:1;justify-content:center;padding:12px}
+#saveAllBtn{font-size:15px!important;padding:9px 16px!important;font-weight:700}
+/* 存好／失敗的大提示 */
+.big-toast{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%) scale(.9);z-index:200;min-width:260px;max-width:90vw;padding:26px 28px;border-radius:14px;
+  color:#fff;font-size:22px;font-weight:700;text-align:center;line-height:1.5;box-shadow:0 12px 40px rgba(0,0,0,.35);opacity:0;transition:.2s;pointer-events:none}
+.big-toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.big-toast.ok{background:#2e7d32}.big-toast.err{background:#c0392b}
+.big-toast .ic{font-size:52px;display:block;line-height:1;margin-bottom:8px}
+.big-toast small{display:block;font-size:15px;font-weight:500;margin-top:6px;opacity:.9}
 .list-search{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
 .list-search input{flex:1;min-width:200px;font-family:inherit;font-size:16px;padding:9px 12px;border:1.5px solid var(--border);border-radius:4px;outline:none}
 .list-search input:focus{border-color:var(--accent)}
@@ -266,7 +280,7 @@ tr:hover td{background:var(--accent-light)}
       <button class="btn btn-secondary" style="padding:3px 10px;font-size:11px" onclick="prevItem()">‹ 上一筆</button>
       <button class="btn btn-secondary" style="padding:3px 10px;font-size:11px" onclick="nextItem()">下一筆 ›</button>
       <button class="btn btn-secondary" style="padding:3px 10px;font-size:11px" onclick="skipItem()">✕ 這筆不要</button>
-      <button class="btn btn-success" id="saveAllBtn" style="padding:3px 12px;font-size:12px" onclick="saveAll()">☁ 全部一起存</button>
+      <button class="btn btn-success" id="saveAllBtn" onclick="saveAll()">☁ 全部一起存</button>
     </span>
   </div>
 
@@ -1017,7 +1031,8 @@ async function retryPhoto(slot, btn) {
   try {
     const n = await uploadPending({_item: it, _pm: it._pm});
     showStatus('success', n ? '✓ 麥頭照片已上傳' : '這筆還沒對到產品，無法上傳');
-  } catch (e) { showStatus('error', '照片還是傳不上去：' + esc(e.message)); }
+    if (n) bigToast(true, '麥頭照片已上傳');
+  } catch (e) { showStatus('error', '照片還是傳不上去：' + esc(e.message)); bigToast(false, '照片還是傳不上去', plain(e.message)); }
   renderMk();
 }
 async function uploadPending(d) {
@@ -1186,7 +1201,8 @@ async function uploadShipPhoto(i, input) {
     it.done = true;
     const left = ship.items.filter(x => !x.done).length;
     showShip('success', left ? `✓ 已存「${esc(it.prod.品名)}」的麥頭，還有 ${left} 筆` : '✓ 這張出貨單的麥頭都拍好了');
-  } catch (e) { showShip('error', '上傳失敗：' + esc(e.message) + '（雲端空間滿了也會失敗）'); }
+    bigToast(true, '麥頭照片已存好', left ? `還有 ${left} 筆` : '這張出貨單都拍好了');
+  } catch (e) { showShip('error', '上傳失敗：' + esc(photoHint(e))); bigToast(false, '照片沒傳上去', plain(photoHint(e))); }
   renderShip();
 }
 function renderShip() {
@@ -1291,6 +1307,7 @@ async function saveCustomer() {
     const r = await gasPost(payload);
     if (r.success) {
       showCustStatus('success', isEdit ? `✓「${name}」已更新` : `✓「${name}」已新增到 Google 試算表`);
+      bigToast(true, isEdit ? '客戶已更新' : '客戶已新增', name);
       clearCustForm(true); loadCustomers();
     }
     else showCustStatus('error','儲存失敗：'+r.error);
@@ -1444,7 +1461,7 @@ function editOrder(orderId) {
 
   resultCard.classList.add('show');
   saveRow.style.display = 'flex';
-  $('saveBtn').innerHTML = '☁ 更新訂單';
+  saveBtnState();
   switchTab('scan');
 }
 
@@ -1464,7 +1481,7 @@ function handleFile(file){
   editingOrderId=null;
   recognizedItems=[]; recognizedIndex=0;
   $('multiNav').classList.remove('show');
-  $('saveBtn').innerHTML='☁ 儲存到試算表';
+  saveBtnState();
   const reader=new FileReader();
   reader.onload=e=>{
     const url=e.target.result;
@@ -1479,7 +1496,7 @@ $('resetBtn').addEventListener('click',()=>{
   fileBase64=null; fileInput.value=''; editingOrderId=null;
   recognizedItems=[]; recognizedIndex=0;
   $('multiNav').classList.remove('show');
-  $('saveBtn').innerHTML='☁ 儲存到試算表';
+  saveBtnState();
   $('uploadContent').innerHTML=`<div class="upload-icon">📄</div><h3>點擊上傳或拖曳訂單圖片</h3><p>支援 JPG、PNG、PDF（傳真掃描、拍照皆可）</p>`;
   actionRow.style.display='none'; resultCard.classList.remove('show'); saveRow.style.display='none'; hideStatus();
   clearCustomer();
@@ -1497,7 +1514,7 @@ async function analyze(){
     recognizedItems=Array.isArray(r.data)?r.data:[r.data];
     recognizedItems.forEach(it=>{ it._ai=String(it.product||'').trim(); });
     editingOrderId=null;
-    $('saveBtn').innerHTML='☁ 儲存到試算表';
+    saveBtnState();
     showRecognizedItem(0);
     showStatus('success', recognizedItems.length>1 ? `✓ 辨識完成！共偵測到 ${recognizedItems.length} 筆品項，請逐筆確認後儲存。` : '✓ 辨識完成！請確認資料後儲存。');
     resultCard.classList.add('show'); saveRow.style.display='flex';
@@ -1506,6 +1523,7 @@ async function analyze(){
 }
 
 function showRecognizedItem(idx){
+  if(!$('saveBtn').disabled) saveBtnState();
   recognizedIndex=idx;
   const item=recognizedItems[idx];
   // 同一張訂單的下一筆品項，客戶通常一樣，已經選好就不要重選
@@ -1679,7 +1697,9 @@ $('saveBtn').addEventListener('click', async()=>{
   const d=getFormData();
   if(needCustomer(d)) return;
   const isEdit = !!editingOrderId;
+  if($('saveBtn').disabled) return;          // 存檔中，避免連按存兩次
   showStatus('loading', isEdit ? '更新試算表中...' : '儲存到 Google 試算表...');
+  saveBtnState('busy');
   try{
     if(!isEdit) await ensureProducts(d);
     await postRows(buildRows(d, 'O'+Date.now()));
@@ -1688,20 +1708,23 @@ $('saveBtn').addEventListener('click', async()=>{
     if (isEdit) {
       showStatus('success','✓ 訂單已更新！');
       editingOrderId=null;
-      $('saveBtn').innerHTML='☁ 儲存到試算表';
+      saveBtnState('done'); bigToast(true,'訂單已更新');
       return;
     }
     const it=recognizedItems[recognizedIndex]; if(it){ formToItem(); it._saved=true; it._skip=false; }
     const total=recognizedItems.length;
     const nextIdx=recognizedItems.findIndex((x,i)=>i>recognizedIndex && !x._saved && !x._skip);
+    const savedN = recognizedItems.indexOf(it)+1;
     if (total>1 && nextIdx>=0) {
       showRecognizedItem(nextIdx);
-      showStatus('success', `✓ 第 ${recognizedItems.indexOf(it)+1} 筆已儲存，已切換到第 ${nextIdx+1} 筆`);
+      showStatus('success', `✓ 第 ${savedN} 筆已儲存，已切換到第 ${nextIdx+1} 筆`);
+      saveBtnState(); bigToast(true, `第 ${savedN} 筆已存好`, `已切換到第 ${nextIdx+1} 筆`);
     } else {
       if (total>1) renderChips();
       showStatus('success', total>1 ? `✓ 這筆已儲存，${recognizedItems.filter(x=>x._saved).length}/${total} 筆存好了` : '✓ 訂單已儲存到 Google 試算表！');
+      saveBtnState('done'); bigToast(true, '已存好', total>1 ? `${recognizedItems.filter(x=>x._saved).length}/${total} 筆存好了` : '已存到 Google 試算表');
     }
-  }catch(e){showStatus('error','儲存失敗：'+e.message);}
+  }catch(e){ showStatus('error','儲存失敗：'+e.message); saveBtnState(); bigToast(false,'沒有存成功',plain(e.message)); }
 });
 
 // 多筆品項一次全部存（跳過已存、標「不要」的）
@@ -1711,7 +1734,7 @@ async function saveAll(){
   if(needCustomer(d0)) return;
   const todo=recognizedItems.map((it,i)=>i).filter(i=>!recognizedItems[i]._saved && !recognizedItems[i]._skip);
   if(!todo.length) return;
-  $('saveAllBtn').disabled=true;
+  $('saveAllBtn').disabled=true; saveBtnState('busy');
   const ts=Date.now(); let done=0; const photoFails=[];
   try{
     for (const i of todo){
@@ -1727,9 +1750,12 @@ async function saveAll(){
     markRecent(d0.customer);
     showRecognizedItem(todo[todo.length-1]);
     showStatus(photoFails.length?'warning':'success', `✓ ${done} 筆都存好了${getSchedChoice().date?'，也排好程了':''}${photoFails.length?`。但有 ${photoFails.length} 張麥頭照片沒上傳成功（${photoFails.join('；')}），可以到「📷 出貨麥頭」補拍`:''}`);
+    saveBtnState('done');
+    bigToast(true, `${done} 筆都存好了`, photoFails.length ? `但有 ${photoFails.length} 張照片沒傳上去` : '');
   }catch(e){
     showRecognizedItem(todo[done]||recognizedIndex);
     showStatus('error', `存到第 ${done+1} 筆時失敗：${e.message}。已存好的 ${done} 筆不會重複存，再按一次「一起存」即可。`);
+    saveBtnState(); bigToast(false, `第 ${done+1} 筆沒存成功`, `已存好 ${done} 筆，再按一次「一起存」即可`);
   }
   renderChips();
 }
@@ -1842,6 +1868,24 @@ $('exportBtn').addEventListener('click',()=>{
   a.download=`訂單_${d.order_no||'draft'}_${new Date().toLocaleDateString('zh-TW').replace(/\//g,'-')}.csv`; a.click();
 });
 
+// 存檔結果用大提示框顯示，看一眼就知道有沒有存成功
+let toastTimer=null;
+function bigToast(ok, title, sub){
+  let t=$('bigToast'); if(!t){ t=document.createElement('div'); t.id='bigToast'; t.className='big-toast'; document.body.appendChild(t); }
+  t.className='big-toast '+(ok?'ok':'err');
+  t.innerHTML=`<span class="ic">${ok?'✓':'✕'}</span>${title}${sub?`<small>${sub}</small>`:''}`;
+  requestAnimationFrame(()=>t.classList.add('show'));
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'), ok?2200:4500);
+  if(navigator.vibrate) try{ navigator.vibrate(ok?80:[100,60,100]); }catch(e){}
+}
+const plain = m => String(m||'').replace(/<[^>]*>/g,'');
+function saveBtnState(st){
+  const b=$('saveBtn'); if(!b) return;
+  b.classList.remove('done'); b.disabled = st==='busy';
+  if(st==='busy') b.innerHTML='⏳ 儲存中…請稍等';
+  else if(st==='done') { b.classList.add('done'); b.innerHTML='✓ 已儲存（再按一次會再存一筆）'; }
+  else b.innerHTML = editingOrderId ? '☁ 更新訂單' : '☁ 儲存到試算表';
+}
 function showStatus(type,msg){statusBar.className='status-bar '+type;statusBar.style.display='flex';statusBar.innerHTML=type==='loading'?`<div class="spinner"></div><span>${msg}</span>`:`<span>${msg}</span>`;}
 function hideStatus(){statusBar.style.display='none';}
 
