@@ -89,6 +89,10 @@ header .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11p
 .type-switch button.on{border-color:var(--ink);background:var(--ink);color:#fff}
 .fields-grid.t-outer .g-inner,.fields-grid.t-inner .g-outer,.fields-grid.t-divider .g-isize,.fields-grid.t-die .g-pr-o{display:none}
 .g-die{display:none}.fields-grid.t-die .g-die{display:block}
+.stk{background:#f6f8fb;border-left:5px solid #9fb3c8}.stk-head{font-size:13px;font-weight:700;color:var(--ink)}
+.stk-row{font-size:13px;margin-top:6px;padding:7px 10px;border:1px solid var(--border);border-radius:4px;background:#fff;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline}
+.stk-row b{font-size:15px}.stk-ok{color:var(--success);font-weight:700}.stk-short{color:var(--warning);font-weight:700}.stk-buy{color:var(--accent);font-weight:700;margin-top:6px;font-size:13px}
+.stk-rot{font-size:11px;padding:1px 6px;border-radius:3px;background:var(--warning-light);color:var(--warning);border:1px solid #f6cc7a}
 .die-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px;font-size:13px;color:var(--ink-light)}
 .multi-nav.show{display:flex;flex-wrap:wrap;gap:8px}
 .multi-nav > span:last-child{display:flex;gap:6px;flex-wrap:wrap}
@@ -319,12 +323,14 @@ tr:hover td{background:var(--accent-light)}
       <div class="field g-outer"><label><span class="nm-o">外箱</span>數量</label><input id="f_outer_qty" placeholder="－"></div>
       <div class="field g-outer"><label><span class="nm-o">外箱</span>尺寸（長×寬×高 台分）</label><input id="f_outer_size" class="mono" placeholder="－"></div>
       <div class="field g-outer"><label><span class="nm-o">外箱</span>用紙（空白＝自動算）</label><input id="f_outer_material" class="mono" placeholder="－"></div>
+      <div class="field full g-outer stk" id="stk_outer" style="display:none"></div>
       <div class="field g-outer g-pr-o"><label><span class="nm-o">外箱</span>印刷（決定要不要排印刷站）</label><div class="type-switch" id="pr_outer"></div></div>
       <div class="field full g-outer"><label><span class="nm-o">外箱</span>麥頭照片（印好的拍一張，正嘜側嘜同一張）</label><div class="mk-attach" id="mk_outer"></div></div>
       <div class="field full pm g-inner" id="pm_inner" style="display:none"></div>
       <div class="field g-inner"><label><span class="nm-i">內盒</span>數量</label><input id="f_inner_qty" placeholder="－"></div>
       <div class="field g-inner g-isize"><label><span class="nm-i">內盒</span>尺寸（長×寬×高 台分）</label><input id="f_inner_size" class="mono" placeholder="－"></div>
       <div class="field g-inner"><label><span class="nm-i">內盒</span>用紙（空白＝自動算）</label><input id="f_inner_material" class="mono" placeholder="－（隔板請填，例如 45×168）"></div>
+      <div class="field full g-inner stk" id="stk_inner" style="display:none"></div>
       <div class="field g-inner"><label><span class="nm-i">內盒</span>印刷（決定要不要排印刷站）</label><div class="type-switch" id="pr_inner"></div></div>
       <div class="field full g-inner"><label><span class="nm-i">內盒</span>麥頭照片（印好的拍一張）</label><div class="mk-attach" id="mk_inner"></div></div>
       <div class="field"><label>條碼</label><input id="f_barcode" class="mono" placeholder="－"></div>
@@ -816,8 +822,67 @@ function candButtons(slot, list) {
   return `<div class="pm-cands">${list.map(p => `<button type="button" class="pm-cand" onclick="pickProduct('${slot}','${esc(p.產品ID)}')"><b>${prodLine(p)}</b></button>`).join('')}</div>`;
 }
 
+// ═══ 備料建議：用紙 → 找紙板庫存（只建議，不扣庫存） ═══
+// 庫存紙寫法：寬×長（長＝波浪方向）；用紙也照這個寫法比
+const STK = {waste:0.15, loss:0.03};       // 浪費 15% 以內才建議用；損耗 3%
+let stock = [];
+async function loadStock() {
+  try { const r = await fetch(`${GAS_URL}?action=getStock`); const d = await r.json(); if (d.success && Array.isArray(d.data)) stock = d.data; } catch (e) {}
+  renderStock();
+}
+function stockNeed(slot) {
+  const t = boxType;
+  if (slot === 'outer' ? !isOut(t) : !isIn(t)) return null;
+  const S = SLOT[slot], raw = $(S.mat).value.trim();
+  const die = slot === 'outer' && t === 'die';
+  const layer = die ? +dieOf(curItem()).layer : layerOf(slot);
+  const calc = raw ? '' : (die ? calcMat($(S.size).value, kindOf('outer'), layer) : calcMaterial($(S.size).value, slot));
+  const m = (raw || calc).match(/(\d+(?:\.\d+)?)\s*[×xX*]\s*(\d+(?:\.\d+)?)/); if (!m) return null;
+  const n = raw.match(/×\s*(\d+)\s*張/), per = n ? +n[1] : 1;
+  const qty = parseInt(String($(slot === 'outer' ? 'f_outer_qty' : 'f_inner_qty').value).replace(/[^\d]/g, ''), 10) || 0;
+  const P = pm[slot] && pm[slot].prod, white = !!(P && /白/.test(P.紙色 || ''));
+  return {A:+m[1], B:+m[2], per, qty, need:Math.ceil(qty * per * (1 + STK.loss)), layer, white, die, auto:!raw};
+}
+function stockMatch(nd) {
+  const out = [];
+  stock.forEach(s => {
+    const W = +s.寬, L = +s.長, cnt = +s.張數 || 0;
+    if (!W || !L || !cnt || +s.層數 !== nd.layer || String(s.保留給 || '').trim()) return;
+    if (/白/.test(s.備註 || '') !== nd.white) return;
+    [[W, L, false], [L, W, true]].forEach(([w, l, rot]) => {
+      const pcs = Math.floor(w / nd.A) * Math.floor(l / nd.B); if (!pcs) return;
+      const waste = 1 - pcs * nd.A * nd.B / (W * L);
+      if (waste <= STK.waste) out.push({s, pcs, waste, rot, make: pcs * cnt});
+    });
+  });
+  // 波浪方向對的優先，再來浪費少的，再來舊的
+  return out.sort((a, b) => (a.rot - b.rot) || (a.waste - b.waste) || String(a.s.入庫日).localeCompare(String(b.s.入庫日)))
+    .filter((x, i, arr) => arr.findIndex(y => y.s.庫存ID === x.s.庫存ID) === i).slice(0, 3);
+}
+function renderStock() {
+  ['outer', 'inner'].forEach(slot => {
+    const el = $('stk_' + slot); if (!el) return;
+    const nd = stock.length ? stockNeed(slot) : null;
+    if (!nd) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    const size = `${nd.A}×${nd.B}`;
+    let h = `<div class="stk-head">📦 備料建議：用紙 ${size}${nd.auto ? '（自動算）' : ''}${nd.qty ? `，共要 ${nd.need} 張（${nd.qty}${nd.per > 1 ? `×${nd.per}` : ''}，含損耗 3%）` : '（數量填了才算張數）'}</div>`;
+    if (nd.die) { el.innerHTML = h + `<div class="stk-buy">斬盒：紙直接送加工廠 → 要訂紙${nd.qty ? ` ${nd.need} 張` : ''}</div>`; return; }
+    const list = stockMatch(nd);
+    if (!list.length) { el.innerHTML = h + `<div class="stk-buy">庫存沒有合適的紙（${nd.layer} 層、浪費 15% 以內）→ 要訂紙${nd.qty ? ` ${nd.need} 張` : ''} ${size}</div>`; return; }
+    h += list.map(x => {
+      const enough = !nd.qty || x.make >= nd.need;
+      const st = !nd.qty ? '' : enough ? `<span class="stk-ok">✓ 夠用</span>` : `<span class="stk-short">不夠，還差 ${Math.ceil((nd.need - x.make) / x.pcs) * x.pcs} 片，要訂紙</span>`;
+      return `<div class="stk-row"><b>${esc(x.s.庫存ID)} ${esc(x.s.寬)}×${esc(x.s.長)}</b><span>${esc(x.s.位置 || '')}</span>
+        <span>一張裁 ${x.pcs} 片・浪費 ${(x.waste * 100).toFixed(1)}%</span><span>約 ${esc(x.s.張數)} 張 → ${x.make} 片</span>${x.rot ? '<span class="stk-rot">要轉向</span>' : ''}${st}</div>`;
+    }).join('');
+    el.innerHTML = h;
+  });
+}
+['f_outer_size', 'f_inner_size', 'f_outer_material', 'f_inner_material', 'f_outer_qty', 'f_inner_qty'].forEach(id => $(id).addEventListener('input', () => renderStock()));
+
 function renderPM() {
-  renderPrint(); renderMk(); renderDie();
+  renderPrint(); renderMk(); renderDie(); renderStock();
   ['outer', 'inner'].forEach(slot => {
     const el = $('pm_' + slot), st = pm[slot], L = slotName(slot);
     const base = 'field full pm g-' + slot;
@@ -1960,6 +2025,7 @@ function hideStatus(){statusBar.style.display='none';}
 
 // ── Init ──
 loadCustomers();
+loadStock();
 loadRecent();
 
 // ── PWA Install ──

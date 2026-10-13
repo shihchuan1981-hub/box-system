@@ -207,6 +207,20 @@ function findProductRow(sh, id) {
   return -1;
 }
 
+// ═══ 紙板庫存（只讀，給接單頁的備料建議用） ═══
+function getStock() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('紙板庫存');
+  if (!sh) return [];
+  const v = sh.getDataRange().getValues();
+  const h = v[0].map(String), out = [];
+  for (let i = 1; i < v.length; i++) {
+    if (!v[i][0]) continue;
+    const o = {}; h.forEach((k, j) => { if (k) o[k] = cellText(v[i][j]); });
+    if ((Number(o['張數']) || 0) > 0) out.push(o);
+  }
+  return out;
+}
+
 // 新產品：自動給下一個產品ID，存在最後一列
 function saveProduct(p) {
   const lock = LockService.getScriptLock();
@@ -445,6 +459,10 @@ function doGet(e) {
   }
   if (action === 'getPhoto') {
     try { return ok(getPhoto(e.parameter.id)); }
+    catch (err) { return ContentService.createTextOutput(JSON.stringify({success:false, error:err.message})).setMimeType(ContentService.MimeType.JSON); }
+  }
+  if (action === 'getStock') {
+    try { return ok(getStock()); }
     catch (err) { return ContentService.createTextOutput(JSON.stringify({success:false, error:err.message})).setMimeType(ContentService.MimeType.JSON); }
   }
   if (action === 'getProducts') {
