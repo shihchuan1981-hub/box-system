@@ -87,7 +87,7 @@ header .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11p
 .pr-why{font-size:11px;color:var(--ink-light);margin-left:6px;align-self:center}
 .type-switch button.on.pr-yes{border-color:var(--accent);background:var(--accent)}
 .type-switch button.on{border-color:var(--ink);background:var(--ink);color:#fff}
-.fields-grid.t-outer .g-inner,.fields-grid.t-inner .g-outer{display:none}
+.fields-grid.t-outer .g-inner,.fields-grid.t-inner .g-outer,.fields-grid.t-divider .g-isize{display:none}
 .multi-nav.show{display:flex;flex-wrap:wrap;gap:8px}
 .multi-nav > span:last-child{display:flex;gap:6px;flex-wrap:wrap}
 .item-chips{display:flex;flex-wrap:wrap;gap:4px;width:100%}
@@ -308,26 +308,27 @@ tr:hover td{background:var(--accent-light)}
         <div class="type-switch" id="typeSwitch">
           <button type="button" data-t="outer" onclick="setBoxType('outer',true)">外箱</button>
           <button type="button" data-t="inner" onclick="setBoxType('inner',true)">內盒</button>
-          <button type="button" data-t="both" onclick="setBoxType('both',true)">外箱＋內盒</button>
+          <button type="button" data-t="die" onclick="setBoxType('die',true)">斬盒</button>
+          <button type="button" data-t="divider" onclick="setBoxType('divider',true)">隔板</button>
         </div>
       </div>
       <div class="field full pm g-outer" id="pm_outer" style="display:none"></div>
-      <div class="field g-outer"><label>外箱數量</label><input id="f_outer_qty" placeholder="－"></div>
-      <div class="field g-outer"><label>外箱尺寸（長×寬×高 台分）</label><input id="f_outer_size" class="mono" placeholder="－"></div>
-      <div class="field g-outer"><label>外箱用紙（空白＝自動算）</label><input id="f_outer_material" class="mono" placeholder="－"></div>
-      <div class="field g-outer"><label>外箱印刷（決定要不要排印刷站）</label><div class="type-switch" id="pr_outer"></div></div>
-      <div class="field full g-outer"><label>外箱麥頭照片（印好的拍一張，正嘜側嘜同一張）</label><div class="mk-attach" id="mk_outer"></div></div>
+      <div class="field g-outer"><label><span class="nm-o">外箱</span>數量</label><input id="f_outer_qty" placeholder="－"></div>
+      <div class="field g-outer"><label><span class="nm-o">外箱</span>尺寸（長×寬×高 台分）</label><input id="f_outer_size" class="mono" placeholder="－"></div>
+      <div class="field g-outer"><label><span class="nm-o">外箱</span>用紙（空白＝自動算）</label><input id="f_outer_material" class="mono" placeholder="－"></div>
+      <div class="field g-outer"><label><span class="nm-o">外箱</span>印刷（決定要不要排印刷站）</label><div class="type-switch" id="pr_outer"></div></div>
+      <div class="field full g-outer"><label><span class="nm-o">外箱</span>麥頭照片（印好的拍一張，正嘜側嘜同一張）</label><div class="mk-attach" id="mk_outer"></div></div>
       <div class="field full pm g-inner" id="pm_inner" style="display:none"></div>
-      <div class="field g-inner"><label>內盒數量</label><input id="f_inner_qty" placeholder="－"></div>
-      <div class="field g-inner"><label>內盒尺寸（長×寬×高 台分）</label><input id="f_inner_size" class="mono" placeholder="－"></div>
-      <div class="field g-inner"><label>內盒用紙（空白＝自動算）</label><input id="f_inner_material" class="mono" placeholder="－"></div>
-      <div class="field g-inner"><label>內盒印刷（決定要不要排印刷站）</label><div class="type-switch" id="pr_inner"></div></div>
-      <div class="field full g-inner"><label>內盒麥頭照片（印好的拍一張）</label><div class="mk-attach" id="mk_inner"></div></div>
+      <div class="field g-inner"><label><span class="nm-i">內盒</span>數量</label><input id="f_inner_qty" placeholder="－"></div>
+      <div class="field g-inner g-isize"><label><span class="nm-i">內盒</span>尺寸（長×寬×高 台分）</label><input id="f_inner_size" class="mono" placeholder="－"></div>
+      <div class="field g-inner"><label><span class="nm-i">內盒</span>用紙（空白＝自動算）</label><input id="f_inner_material" class="mono" placeholder="－（隔板請填，例如 45×168）"></div>
+      <div class="field g-inner"><label><span class="nm-i">內盒</span>印刷（決定要不要排印刷站）</label><div class="type-switch" id="pr_inner"></div></div>
+      <div class="field full g-inner"><label><span class="nm-i">內盒</span>麥頭照片（印好的拍一張）</label><div class="mk-attach" id="mk_inner"></div></div>
       <div class="field"><label>條碼</label><input id="f_barcode" class="mono" placeholder="－"></div>
       <div class="field"><label>Item No.</label><input id="f_item_no" class="mono" placeholder="－"></div>
       <div class="field full g-outer"><label>正嘜 Front Mark（變數用 [變數名] 標記）</label><textarea id="f_front_mark" rows="5" placeholder="－"></textarea></div>
       <div class="field full g-outer"><label>側嘜 Side Mark（變數用 [變數名] 標記）</label><textarea id="f_side_mark" rows="5" placeholder="－"></textarea></div>
-      <div class="field full g-inner"><label>內盒印刷（有填＝內盒要經過印刷站）</label><textarea id="f_inner_mark" rows="3" placeholder="－"></textarea></div>
+      <div class="field full g-inner"><label><span class="nm-i">內盒</span>印刷（有填＝要經過印刷站）</label><textarea id="f_inner_mark" rows="3" placeholder="－"></textarea></div>
       <div class="field full sched-field">
         <label>排程（存檔時一起排好）</label>
         <div class="sched-row">
@@ -699,14 +700,20 @@ const matKey = s => (String(s || '').match(/\d+(?:\.\d+)?/g) || []).slice(0, 2).
 const dateNum = s => { const m = String(s || '').match(/(\d{4})\D(\d{1,2})\D(\d{1,2})/); return m ? +m[1]*10000 + +m[2]*100 + +m[3] : 0; };
 const byRecent = (a, b) => dateNum(b.最後出貨) - dateNum(a.最後出貨) || (+b.出貨次數 || 0) - (+a.出貨次數 || 0);
 const aliasesOf = p => [p.品名, ...String(p.其他寫法 || '').split(/[｜|]/)].filter(Boolean);
-const kindOf = (slot, P = pm) => (P && P[slot].prod && P[slot].prod.箱型) || SLOT[slot].defKind;
-const layerOf = (slot, P = pm) => Number(P && P[slot].prod && P[slot].prod.層數) || SLOT[slot].defLayer;
+// 四種品類：外箱、內盒、斬盒（用外箱欄位）、隔板（用內盒欄位）
+const isOut = t => t === 'outer' || t === 'die';
+const isIn = t => t === 'inner' || t === 'divider';
+const defKind = (slot, t = boxType) => slot === 'outer' ? (t === 'die' ? '斬式' : '外箱') : (t === 'divider' ? '隔板' : '內箱');
+const defLayer = (slot, t = boxType) => slot === 'outer' && t !== 'die' ? 5 : 3;
+const slotName = (slot, t = boxType) => slot === 'outer' ? (t === 'die' ? '斬盒' : '外箱') : (t === 'divider' ? '隔板' : '內盒');
+const kindOf = (slot, P = pm, t = boxType) => (P && P[slot].prod && P[slot].prod.箱型) || defKind(slot, t);
+const layerOf = (slot, P = pm, t = boxType) => Number(P && P[slot].prod && P[slot].prod.層數) || defLayer(slot, t);
 const curItem = () => editingOrderId ? null : recognizedItems[recognizedIndex];
 // 讀寫一筆品項的欄位：畫面上這一筆讀表單，其他筆讀資料
 const tget = (it, id) => it === curItem() ? $(id).value : (it[FKEY[id]] || '');
 const tset = (it, id, v) => { if (it === curItem()) $(id).value = v; else it[FKEY[id]] = v; };
 const typeOf = it => it === curItem() ? boxType : (it._type || guessType(it));
-const slotsOf = it => { const t = typeOf(it); return t === 'outer' ? ['outer'] : t === 'inner' ? ['inner'] : ['outer', 'inner']; };
+const slotsOf = it => { const t = typeOf(it); return isOut(t) ? ['outer'] : isIn(t) ? ['inner'] : ['outer', 'inner']; };
 
 async function loadProducts(c) {
   if (prodCache[c.id]) return prodCache[c.id];
@@ -809,7 +816,7 @@ function candButtons(slot, list) {
 function renderPM() {
   renderPrint(); renderMk();
   ['outer', 'inner'].forEach(slot => {
-    const el = $('pm_' + slot), st = pm[slot], L = SLOT[slot].label;
+    const el = $('pm_' + slot), st = pm[slot], L = slotName(slot);
     const base = 'field full pm g-' + slot;
     if (!currentCustomer || editingOrderId) { el.style.display = 'none'; return; }
     el.style.display = '';
@@ -856,13 +863,13 @@ function renderResults(slot) {
 }
 
 function newProductForm(slot) {
-  const kinds = ['外箱','內箱','AB式','上下蓋','斬式','其他'];
+  const kinds = ['外箱','內箱','AB式','上下蓋','斬式','隔板','其他'];
   const it = curItem();
   const nm = (it && it._ai) || $('f_product').value.trim();
   return `<div class="pm-new">🆕 新產品：
     <input id="np_name_${slot}" value="${esc(nm)}" placeholder="品名">
-    <select id="np_kind_${slot}" onchange="$('np_layer_${slot}').value=this.value==='內箱'?'3':'5'">${kinds.map(k => `<option${k === SLOT[slot].defKind ? ' selected' : ''}>${k}</option>`).join('')}</select>
-    <select id="np_layer_${slot}"><option value="5"${SLOT[slot].defLayer === 5 ? ' selected' : ''}>五層</option><option value="3"${SLOT[slot].defLayer === 3 ? ' selected' : ''}>三層</option></select>
+    <select id="np_kind_${slot}" onchange="$('np_layer_${slot}').value=['內箱','斬式','隔板'].includes(this.value)?'3':'5'">${kinds.map(k => `<option${k === defKind(slot) ? ' selected' : ''}>${k}</option>`).join('')}</select>
+    <select id="np_layer_${slot}"><option value="5"${defLayer(slot) === 5 ? ' selected' : ''}>五層</option><option value="3"${defLayer(slot) === 3 ? ' selected' : ''}>三層</option></select>
     <button type="button" class="pm-btn go" onclick="saveNewProduct('${slot}', this)">存成新產品</button></div>`;
 }
 
@@ -870,14 +877,16 @@ async function saveNewProduct(slot, btn) {
   const name = $('np_name_' + slot).value.trim();
   const size = $(SLOT[slot].size).value.trim();
   if (!name) { alert('請填品名'); return; }
-  if (!sizeKey(size)) { alert(`請先填${SLOT[slot].label}尺寸（長×寬×高）`); return; }
   const kind = $('np_kind_' + slot).value, layer = +$('np_layer_' + slot).value;
   const mat = $(SLOT[slot].mat).value.trim().replace(/\s*×\s*\d+張$/, '') || calcMat(size, kind, layer);
+  // 隔板沒有長寬高，用用紙當尺寸
+  const pSize = sizeKey(size) ? sizeKey(size).split('x').join('×') : (kind === '隔板' && matKey(mat).includes('x') ? matKey(mat).split('x').join('×') : '');
+  if (!pSize) { alert(kind === '隔板' ? '請先填隔板用紙（例如 45×168）' : `請先填${slotName(slot)}尺寸（長×寬×高）`); return; }
   const it = curItem();
   const p = {
     '客戶ID': currentCustomer.id, '客戶名稱': currentCustomer.name, '品名': name,
     '其他寫法': it && it._ai && nameKey(it._ai) !== nameKey(name) ? it._ai : '',
-    '箱型': kind, '尺寸': sizeKey(size).split('x').join('×'), '用紙': mat, '層數': String(layer),
+    '箱型': kind, '尺寸': pSize, '用紙': mat, '層數': String(layer),
     '紙色': /W$/i.test(name) ? '白' : '',
     '正嘜': slot === 'outer' ? $('f_front_mark').value : $('f_inner_mark').value,
     '側嘜': slot === 'outer' ? $('f_side_mark').value : '',
@@ -922,6 +931,7 @@ $('f_product').addEventListener('change', () => rematchCurrent(true));
 // ═══ 印刷：有印／不印（排程時決定要不要經過印刷站） ═══
 // 沒選的話自動判斷：產品資料 → 訂單有麥頭或寫「印」→ 產品有照片／麥頭 → 都沒有就不印
 let editPrint = {outer:'', inner:''};      // 編輯舊訂單時用
+let editOrigForm = '';                      // 編輯舊訂單時，試算表 T 欄（成型方式）原本的值
 function printGuess(it, slot) {
   const P = it && it._pm && it._pm[slot].prod;
   if (P && P.印刷 === '有印') return {v:'是', why:'產品資料'};
@@ -1001,12 +1011,12 @@ async function ensureProducts(d) {
   const it = d._item; if (!it || !it._photo) return;
   const cust = customers.find(c => c.name === d.customer) || currentCustomer; if (!cust) return;
   if (!d._pm) d._pm = it._pm = Object.assign(newPM(), {custId: cust.id});
-  const used = d._type === 'outer' ? ['outer'] : d._type === 'inner' ? ['inner'] : ['outer', 'inner'];
+  const used = isOut(d._type) ? ['outer'] : isIn(d._type) ? ['inner'] : ['outer', 'inner'];
   for (const slot of used) {
     if (!it._photo[slot] || d._pm[slot].prod) continue;
     const size = slot === 'outer' ? d.outer_size : d.inner_size;
     if (!sizeKey(size)) continue;
-    const kind = SLOT[slot].defKind, layer = SLOT[slot].defLayer;
+    const kind = defKind(slot, d._type), layer = defLayer(slot, d._type);
     const name = d._type === 'both' ? d.product + (slot === 'outer' ? ' 外箱' : ' 內盒') : d.product;
     const mat = String((slot === 'outer' ? d.outer_material : d.inner_material) || '').replace(/\s*×\s*\d+張$/, '') || calcMat(size, kind, layer);
     const r = await gasPost({action:'saveProduct', product:{'客戶ID':cust.id, '客戶名稱':cust.name, '品名':name, '其他寫法':'', '箱型':kind,
@@ -1386,7 +1396,7 @@ async function loadOrders() {
         <td style="font-size:12px">${esc(r[3])}</td>
         <td style="font-family:monospace;font-size:12px">${esc(r[4])}</td>
         <td>${esc(r[6])}</td>
-        <td style="color:var(--accent);font-weight:600">${esc(r[10])}</td>
+        <td style="color:var(--accent);font-weight:600">${esc(fmtD(r[10]))}</td>
         <td><select onchange="changeOrderStatus('${esc(r[0])}', this.value)" style="font-size:11px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;font-family:inherit">
           ${['待出貨','已出貨','已取消'].map(s=>`<option value="${s}" ${(r[14]||'待出貨')===s?'selected':''}>${s}</option>`).join('')}
         </select></td>
@@ -1436,7 +1446,7 @@ function editOrder(orderId) {
 
   $('f_order_no').value = orderId;
   $('f_order_date').value = '';
-  $('f_delivery_date').value = r[10]||'';
+  $('f_delivery_date').value = fmtD(r[10]);
   $('f_product').value = r[3]||'';
   $('f_outer_qty').value = r[6]||'';
   $('f_outer_size').value = r[4]||'';
@@ -1453,9 +1463,13 @@ function editOrder(orderId) {
   const pr = /^(是|y|yes|v|✓|1|true)$/i.test(String(r[17]||'').trim()) ? '是' : (/^(否|n|no|0|false)$/i.test(String(r[17]||'').trim()) ? '否' : '');
   editPrint = {outer:pr, inner:pr};
   // 內盒那列的印刷內容存在麥頭欄，編輯時放回「內盒印刷」
-  const t = guessType({outer_size:r[4],outer_qty:r[6],outer_material:r[5],inner_size:r[7],inner_qty:r[9],inner_material:r[8]});
-  $('f_inner_mark').value = t==='inner' ? (r[11]||'') : '';
-  if (t==='inner') $('f_front_mark').value = '';
+  let t = guessType({product:r[3],outer_size:r[4],outer_qty:r[6],outer_material:r[5],inner_size:r[7],inner_qty:r[9],inner_material:r[8]});
+  editOrigForm = String(r[19]||'').trim();
+  if (editOrigForm==='斬盒' && isOut(t)) t='die';
+  if (editOrigForm==='平板紙板' && isIn(t)) t='divider';
+  if (t==='both') t='outer';
+  $('f_inner_mark').value = isIn(t) ? (r[11]||'') : '';
+  if (isIn(t)) $('f_front_mark').value = '';
   setBoxType(t);
   $('orderNoDisplay').textContent = orderId;
 
@@ -1513,6 +1527,10 @@ async function analyze(){
     if(!r.success) throw new Error(r.error||'辨識失敗');
     recognizedItems=Array.isArray(r.data)?r.data:[r.data];
     recognizedItems.forEach(it=>{ it._ai=String(it.product||'').trim(); });
+    // 同一筆同時有外箱和內盒 → 拆成兩筆（品名後加「外箱」「內盒」）
+    recognizedItems = recognizedItems.flatMap(it => guessType(it)!=='both' ? [it] : [
+      {...it, _type:'outer', product:(it.product||'')+' 外箱', inner_size:'', inner_qty:'', inner_material:'', inner_sheets:'', inner_mark:''},
+      {...it, _type:'inner', product:(it.product||'')+' 內盒', outer_size:'', outer_qty:'', outer_material:'', outer_sheets:'', front_mark:'', side_mark:''}]);
     editingOrderId=null;
     saveBtnState();
     showRecognizedItem(0);
@@ -1561,7 +1579,7 @@ function formToItem(){
 }
 function itemLabel(it){
   const t = it._type||guessType(it);
-  const type = t==='both' ? '外+內' : t==='inner' ? '內盒' : '外箱';
+  const type = {both:'外+內', inner:'內盒', die:'斬盒', divider:'隔板'}[t] || '外箱';
   return `${type} ${it.product||it.item_no||'?'}`;
 }
 function renderChips(){
@@ -1577,18 +1595,34 @@ function skipItem(){
   showStatus('success', it._skip ? `第 ${recognizedIndex+1} 筆標成「不要」，全部一起存時會跳過（再按一次可取消）` : `第 ${recognizedIndex+1} 筆恢復`);
 }
 
-// 這筆是外箱、內盒、還是兩個都有：只顯示該類型的欄位
-let boxType='both';
+// 這筆是外箱、內盒、斬盒、隔板：只顯示該類型的欄位
+// （AI 讀到外箱＋內盒寫在同一筆時，辨識完會拆成兩筆）
+let boxType='outer';
 function guessType(d){
+  const nm=String(d.product||'');
   const o=!!((d.outer_size||'')+(d.outer_qty||'')+(d.outer_material||'')).trim();
   const i=!!((d.inner_size||'')+(d.inner_qty||'')+(d.inner_material||'')+(d.inner_mark||'')).trim();
-  return o&&i?'both':i?'inner':o?'outer':'both';
+  if (o&&i) return 'both';
+  if (/隔板/.test(nm)) return 'divider';
+  if (i) return 'inner';
+  if (/斬/.test(nm)) return 'die';
+  return 'outer';
 }
 function setBoxType(t, user){
+  const prev=boxType;
   boxType=t;
+  // 手動從外箱類換到內盒類（或反過來）：數量、尺寸、用紙跟著搬過去，不用重打
+  const grp = x => isOut(x)?'o':isIn(x)?'i':'';
+  if (user && grp(prev) && grp(t) && grp(prev)!==grp(t)) {
+    const [from,to] = grp(t)==='i' ? ['outer','inner'] : ['inner','outer'];
+    ['qty','size','material'].forEach(k=>{ const a=$(`f_${from}_${k}`), b=$(`f_${to}_${k}`); if(!b.value.trim() && a.value.trim()){ b.value=a.value; a.value=''; } });
+  }
   if (user) setTimeout(()=>rematchCurrent(false));
   const g=document.querySelector('.fields-grid');
-  g.classList.toggle('t-outer',t==='outer'); g.classList.toggle('t-inner',t==='inner');
+  g.classList.toggle('t-outer',isOut(t)); g.classList.toggle('t-inner',isIn(t)); g.classList.toggle('t-divider',t==='divider');
+  document.querySelectorAll('.nm-o').forEach(e=>e.textContent=slotName('outer',t));
+  document.querySelectorAll('.nm-i').forEach(e=>e.textContent=slotName('inner',t));
+  if (user) setTimeout(()=>{ renderPrint(); renderMk(); });
   document.querySelectorAll('#typeSwitch button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
 }
 
@@ -1651,24 +1685,26 @@ function getFormData(){
 // ── Save Order ──
 // 一筆品項 → 要寫進試算表的列（外箱、內盒都有就拆兩列）
 function buildRows(d, id){
-  if (d._type==='outer') Object.assign(d,{inner_size:'',inner_qty:'',inner_material:'',inner_mark:''});
-  if (d._type==='inner') Object.assign(d,{outer_size:'',outer_qty:'',outer_material:'',front_mark:'',side_mark:''});
-  const outerM=d.outer_material||calcMaterial(d.outer_size,'outer',d._pm);
-  const innerM=d.inner_material||calcMaterial(d.inner_size,'inner',d._pm);
+  if (isOut(d._type)) Object.assign(d,{inner_size:'',inner_qty:'',inner_material:'',inner_mark:''});
+  if (isIn(d._type)) Object.assign(d,{outer_size:'',outer_qty:'',outer_material:'',front_mark:'',side_mark:''});
+  const outerM=d.outer_material||calcMaterial(d.outer_size,'outer',d._pm,d._type);
+  const innerM=d.inner_material||calcMaterial(d.inner_size,'inner',d._pm,d._type);
+  // 試算表 T 欄成型方式：斬盒寫「斬盒」、隔板寫「平板紙板」（不經釘箱站）
+  const form = d._type==='die' ? '斬盒' : d._type==='divider' ? '平板紙板' : (editingOrderId && /^(斬盒|平板紙板)$/.test(editOrigForm) ? '' : undefined);
   const sch=getSchedChoice();
   const base={action:'saveOrder', ...(sch.shipped?{status:'已出貨'}:{}), date:d.saved_at, customer:d.customer, delivery:d.delivery_date, notes:d.notes, orderNo:(d.order_no||'').trim(),
     schedDate:sch.date, rush:sch.date!==undefined||sch.rush?sch.rush:undefined};
   const pv = slot => printOf(d._item||null, slot).v;
   const outerRow={...base, ...prodExtra(d._pm,'outer'), print:pv('outer'), product:d.product, outerSize:d.outer_size, outerMaterial:outerM, outerQty:d.outer_qty,
-    innerSize:'', innerMaterial:'', innerQty:'', frontMark:d.front_mark, sideMark:d.side_mark};
+    innerSize:'', innerMaterial:'', innerQty:'', frontMark:d.front_mark, sideMark:d.side_mark, form};
   const innerRow={...base, ...prodExtra(d._pm,'inner'), print:pv('inner'), product:d.product, outerSize:'', outerMaterial:'', outerQty:'',
-    innerSize:d.inner_size, innerMaterial:innerM, innerQty:d.inner_qty, frontMark:d.inner_mark, sideMark:''};
+    innerSize:d.inner_size, innerMaterial:innerM, innerQty:d.inner_qty, frontMark:d.inner_mark, sideMark:'', form};
   if (editingOrderId) {
     // 編輯舊訂單：照原本一列更新
     return [{...base, orderId:editingOrderId, product:d.product, outerSize:d.outer_size, outerMaterial:d.outer_size?outerM:'', outerQty:d.outer_qty,
       innerSize:d.inner_size, innerMaterial:(d.inner_size||d.inner_material)?innerM:'', innerQty:d.inner_qty,
-      frontMark:d._type==='inner'?d.inner_mark:d.front_mark, sideMark:d._type==='inner'?'':d.side_mark,
-      print:editPrint[d._type==='inner'?'inner':'outer']||undefined}];
+      frontMark:isIn(d._type)?d.inner_mark:d.front_mark, sideMark:isIn(d._type)?'':d.side_mark,
+      print:editPrint[isIn(d._type)?'inner':'outer']||undefined, form}];
   }
   const hasOuter=!!d.outer_size.trim();
   // 隔板這類沒有尺寸、只有用紙和數量的內盒品項，也算內盒
@@ -1807,7 +1843,9 @@ function calcMat(size,kind,layer){
   const l = kind==='上下蓋' ? s.w+2*s.h : (s.l+s.w)*2+add;
   return `${w}×${l}`;
 }
-function calcMaterial(size,type,P){ const sl=type==='outer'?'outer':'inner'; return calcMat(size, kindOf(sl,P||pm), layerOf(sl,P||pm)); }
+function calcMaterial(size,type,P,t){ const sl=type==='outer'?'outer':'inner'; return calcMat(size, kindOf(sl,P||pm,t||boxType), layerOf(sl,P||pm,t||boxType)); }
+// 試算表的日期讀回來是「2026-10-15T16:00:00.000Z」，換成「2026/10/16」
+function fmtD(v){ const s=String(v??'').trim(); if(/^\d{4}-\d{2}-\d{2}T/.test(s)){ const d=new Date(s); if(!isNaN(d)) return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`; } return s; }
 
 // ── Print ──
 $('printBtn').addEventListener('click',()=>{
@@ -1828,13 +1866,14 @@ $('printBtn').addEventListener('click',()=>{
     <div class="po-grid">
       <div class="po-cell span2"><div class="po-cell-label">客戶名稱</div><div class="po-cell-value big">${esc(d.customer||d.customerTyped)||'－'}</div></div>
       <div class="po-cell"><div class="po-cell-label">品名 / 型號</div><div class="po-cell-value">${esc(d.product)||'－'}</div></div>
-      <div class="po-cell"><div class="po-cell-label">五層外箱（長×寬×高）</div><div class="po-cell-value mono big">${esc(d.outer_size)||'－'}</div></div>
-      <div class="po-cell"><div class="po-cell-label">外箱用紙（台分）</div><div class="po-cell-value mono big red">${esc(outerM)||'－'}</div></div>
-      <div class="po-cell"><div class="po-cell-label">外箱數量</div><div class="po-cell-value big red">${esc(d.outer_qty)||'－'}</div></div>
-      ${d.inner_size?`
-      <div class="po-cell"><div class="po-cell-label">內盒（長×寬×高）</div><div class="po-cell-value mono big">${esc(d.inner_size)}</div></div>
-      <div class="po-cell"><div class="po-cell-label">內盒用紙（台分）</div><div class="po-cell-value mono big" style="color:#b7770d">${esc(innerM)}</div></div>
-      <div class="po-cell"><div class="po-cell-label">內盒數量</div><div class="po-cell-value big">${esc(d.inner_qty)||'－'}</div></div>`:''}
+      ${isIn(boxType)?'':`
+      <div class="po-cell"><div class="po-cell-label">${slotName('outer')}（長×寬×高）</div><div class="po-cell-value mono big">${esc(d.outer_size)||'－'}</div></div>
+      <div class="po-cell"><div class="po-cell-label">${slotName('outer')}用紙（台分）</div><div class="po-cell-value mono big red">${esc(outerM)||'－'}</div></div>
+      <div class="po-cell"><div class="po-cell-label">${slotName('outer')}數量</div><div class="po-cell-value big red">${esc(d.outer_qty)||'－'}</div></div>`}
+      ${isIn(boxType)?`
+      <div class="po-cell"><div class="po-cell-label">${slotName('inner')}（長×寬×高）</div><div class="po-cell-value mono big">${esc(d.inner_size)||'－'}</div></div>
+      <div class="po-cell"><div class="po-cell-label">${slotName('inner')}用紙（台分）</div><div class="po-cell-value mono big" style="color:#b7770d">${esc(innerM)}</div></div>
+      <div class="po-cell"><div class="po-cell-label">${slotName('inner')}數量</div><div class="po-cell-value big">${esc(d.inner_qty)||'－'}</div></div>`:''}
       <div class="po-cell"><div class="po-cell-label">Item No.</div><div class="po-cell-value mono">${esc(d.item_no)||'－'}</div></div>
       <div class="po-cell span2"><div class="po-cell-label">條碼</div><div class="po-cell-value mono">${esc(d.barcode)||'－'}</div></div>
     </div>
@@ -1843,7 +1882,7 @@ $('printBtn').addEventListener('click',()=>{
       <div class="po-mark-body">
         <div class="po-mark-col"><div class="po-mark-col-title">正嘜 Front Mark</div><div class="po-mark-text">${esc(d.front_mark)||'－'}</div></div>
         <div class="po-mark-col"><div class="po-mark-col-title">側嘜 Side Mark</div><div class="po-mark-text">${esc(d.side_mark)||'－'}</div></div>
-        ${d.inner_mark?`<div class="po-mark-col"><div class="po-mark-col-title">內盒印刷</div><div class="po-mark-text">${esc(d.inner_mark)}</div></div>`:''}
+        ${d.inner_mark?`<div class="po-mark-col"><div class="po-mark-col-title">${slotName('inner')}印刷</div><div class="po-mark-text">${esc(d.inner_mark)}</div></div>`:''}
       </div>
     </div>
     ${['outer','inner'].map(sl=>{ const p=pm[sl]&&pm[sl].prod, ph=photoList(p)[0]; return ph&&photoCache[ph.id]
