@@ -960,7 +960,8 @@ function renderMk() {
     if (editingOrderId) { el.innerHTML = '<span class="pr-why">編輯舊訂單時不能附照片，請到「📷 出貨麥頭」拍</span>'; return; }
     const pend = pendingOf(it, slot), p = pm[slot] && pm[slot].prod, last = photoList(p)[0];
     let h = '';
-    if (pend) h += `<img class="mk-thumb" src="${pend}" alt="麥頭照片" onclick="showPending('${slot}')"><span class="pr-why">✓ 已附，按儲存時一起上傳</span><button type="button" class="pm-btn" onclick="dropPhoto('${slot}')">移除</button>`;
+    if (pend && it && it._saved && p) h += `<img class="mk-thumb" src="${pend}" alt="麥頭照片" onclick="showPending('${slot}')"><span class="pr-why" style="color:var(--accent)">訂單已存，照片還沒傳上去</span><button type="button" class="pm-btn go" onclick="retryPhoto('${slot}', this)">重試上傳</button>`;
+    else if (pend) h += `<img class="mk-thumb" src="${pend}" alt="麥頭照片" onclick="showPending('${slot}')"><span class="pr-why">✓ 已附，按儲存時一起上傳</span><button type="button" class="pm-btn" onclick="dropPhoto('${slot}')">移除</button>`;
     else if (last) h += photoImg(last.id) + `<span class="pr-why">上次麥頭 ${esc(last.date)}</span>`;
     h += `<label class="cam-btn">${pend ? '重拍 ' : '📷 附印好的麥頭 '}<input type="file" accept="image/*" capture="environment" onchange="attachPhoto('${slot}', this)"></label>`;
     el.innerHTML = h;
@@ -1001,14 +1002,34 @@ async function ensureProducts(d) {
     d._pm[slot].prod = r.data;
   }
 }
+function photoHint(e) {
+  const m = String((e && e.message) || e || '');
+  if (/Failed to fetch|Unexpected token|NetworkError|Load failed|JSON/i.test(m))
+    return 'Apps Script 還沒換成新版、或還沒授權雲端硬碟（請照說明執行 authorizeDrive 並部署新版本）；網路斷線也會這樣';
+  if (/permission|權限|authoriz/i.test(m)) return '還沒授權雲端硬碟：請到 Apps Script 執行 authorizeDrive';
+  if (/storage|quota|空間/i.test(m)) return '雲端硬碟空間滿了';
+  return m;
+}
+// 訂單存好但照片沒傳上去：照片留在這一筆，按「重試上傳」再傳
+async function retryPhoto(slot, btn) {
+  const it = curItem(); if (!it) return;
+  btn.disabled = true; btn.textContent = '上傳中…';
+  try {
+    const n = await uploadPending({_item: it, _pm: it._pm});
+    showStatus('success', n ? '✓ 麥頭照片已上傳' : '這筆還沒對到產品，無法上傳');
+  } catch (e) { showStatus('error', '照片還是傳不上去：' + esc(e.message)); }
+  renderMk();
+}
 async function uploadPending(d) {
   const it = d._item; if (!it || !it._photo) return 0;
   let n = 0;
   for (const slot of ['outer', 'inner']) {
     const img = it._photo[slot], p = d._pm && d._pm[slot].prod;
     if (!img || !p) continue;
-    const r = await gasPost({action:'uploadPhoto', productId:p.產品ID, image:img});
-    if (!r.success) throw new Error(r.error);
+    let r;
+    try { r = await gasPost({action:'uploadPhoto', productId:p.產品ID, image:img}); }
+    catch (e) { throw new Error(photoHint(e)); }
+    if (!r.success) throw new Error(photoHint(r.error));
     p.照片 = r.data.photo; if (!p.印刷) p.印刷 = '有印';
     photoCache[photoList(p)[0].id] = img;
     it._photo[slot] = null; n++;
@@ -1663,7 +1684,7 @@ $('saveBtn').addEventListener('click', async()=>{
     if(!isEdit) await ensureProducts(d);
     await postRows(buildRows(d, 'O'+Date.now()));
     markRecent(d.customer); if(!isEdit) markProductsUsed(d._pm); rememberPrint(d._item, d._pm);
-    if(!isEdit){ try{ const n=await uploadPending(d); if(n) showStatus('loading','麥頭照片已上傳…'); }catch(pe){ alert('訂單已存好，但麥頭照片上傳失敗：'+pe.message+'\n可以到「📷 出貨麥頭」補拍。'); } }
+    if(!isEdit){ try{ const n=await uploadPending(d); if(n) showStatus('loading','麥頭照片已上傳…'); }catch(pe){ alert('訂單已存好，但麥頭照片上傳失敗：'+pe.message+'\n\n照片還留在這一筆，修好後按「重試上傳」就好，不用重拍。'); setTimeout(renderMk,50); } }
     if (isEdit) {
       showStatus('success','✓ 訂單已更新！');
       editingOrderId=null;
