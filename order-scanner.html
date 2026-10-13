@@ -789,7 +789,7 @@ function applyTo(it, slot, p, manual) {
   const S = SLOT[slot], osz = sizeKey(tget(it, S.size));
   if (!osz && p.尺寸) tset(it, S.size, p.尺寸);
   // 尺寸一樣才帶資料庫的用紙；客戶改了尺寸就讓公式重算
-  if (!tget(it, S.mat).trim() && p.用紙 && (!osz || osz === sizeKey(p.尺寸))) tset(it, S.mat, p.用紙);
+  if (!tget(it, S.mat).trim() && p.用紙 && (!osz || osz === sizeKey(p.尺寸))) tset(it, S.mat, slot === 'outer' ? splitMat(p.用紙, tget(it, S.size) || p.尺寸, p.箱型 || '外箱') : p.用紙);
   if (slot === 'outer' && (p.正嘜 || p.側嘜)) { tset(it, 'f_front_mark', p.正嘜 || ''); tset(it, 'f_side_mark', p.側嘜 || ''); }
   if (slot === 'inner' && p.正嘜 && !tget(it, 'f_inner_mark').trim()) tset(it, 'f_inner_mark', p.正嘜);
   // 老闆手動點選的，把 AI 這次讀到的寫法記下來，下次就直接對到
@@ -837,11 +837,12 @@ function stockNeed(slot) {
   const die = slot === 'outer' && t === 'die';
   const layer = die ? +dieOf(curItem()).layer : layerOf(slot);
   const calc = raw ? '' : (die ? calcMat($(S.size).value, kindOf('outer'), layer) : calcMaterial($(S.size).value, slot));
-  const m = (raw || calc).match(/(\d+(?:\.\d+)?)\s*[×xX*]\s*(\d+(?:\.\d+)?)/); if (!m) return null;
-  const n = raw.match(/×\s*(\d+)\s*張/), per = n ? +n[1] : 1;
+  const use = raw ? (slot === 'outer' && !die ? splitMat(raw, $(S.size).value, kindOf('outer')) : raw) : calc;
+  const m = use.match(/(\d+(?:\.\d+)?)\s*[×xX*]\s*(\d+(?:\.\d+)?)/); if (!m) return null;
+  const n = use.match(/×\s*(\d+)\s*張/), per = n ? +n[1] : 1;
   const qty = parseInt(String($(slot === 'outer' ? 'f_outer_qty' : 'f_inner_qty').value).replace(/[^\d]/g, ''), 10) || 0;
   const P = pm[slot] && pm[slot].prod, white = !!(P && /白/.test(P.紙色 || ''));
-  return {A:+m[1], B:+m[2], per, qty, need:Math.ceil(qty * per * (1 + STK.loss)), layer, white, die, auto:!raw};
+  return {A:+m[1], B:+m[2], per, qty, need:Math.ceil(qty * per * (1 + STK.loss)), layer, white, die, auto:!raw, split: use !== raw && !!raw};
 }
 function stockMatch(nd) {
   const out = [];
@@ -866,7 +867,7 @@ function renderStock() {
     if (!nd) { el.style.display = 'none'; return; }
     el.style.display = '';
     const size = `${nd.A}×${nd.B}`;
-    let h = `<div class="stk-head">📦 備料建議：用紙 ${size}${nd.auto ? '（自動算）' : ''}${nd.qty ? `，共要 ${nd.need} 張（${nd.qty}${nd.per > 1 ? `×${nd.per}` : ''}，含損耗 3%）` : '（數量填了才算張數）'}</div>`;
+    let h = `<div class="stk-head">📦 備料建議：用紙 ${size}${nd.per > 1 ? ` ×${nd.per}張（二片接）` : ''}${nd.auto ? '（自動算）' : ''}${nd.qty ? `，共要 ${nd.need} 張（${nd.qty}${nd.per > 1 ? `×${nd.per}` : ''}，含損耗 3%）` : '（數量填了才算張數）'}${nd.split ? `<br><small style="font-weight:400;color:var(--warning)">用紙欄寫 ${esc($(SLOT[slot].mat).value)}，長＋寬超過 ${JOIN}，照二片接算</small>` : ''}</div>`;
     if (nd.die) { el.innerHTML = h + `<div class="stk-buy">斬盒：紙直接送加工廠 → 要訂紙${nd.qty ? ` ${nd.need} 張` : ''}</div>`; return; }
     const list = stockMatch(nd);
     if (!list.length) { el.innerHTML = h + `<div class="stk-buy">庫存沒有合適的紙（${nd.layer} 層、浪費 15% 以內）→ 要訂紙${nd.qty ? ` ${nd.need} 張` : ''} ${size}</div>`; return; }
@@ -1930,11 +1931,21 @@ function parseSize(str){
   return p.length===3&&p.every(n=>!isNaN(n))?{l:p[0],w:p[1],h:p[2]}:null;
 }
 // 紙長：三層 +8、五層 +12；紙寬看箱型（AB式 寬×2+高）
+const JOIN = 270;   // 一般外箱 長＋寬 超過這個就二片接
+// 已經寫好的單張用紙（例如產品資料的 313×606）→ 長＋寬超過 270 的外箱改成「313×303 ×2張」
+function splitMat(mat, size, kind) {
+  if (kind !== '外箱') return mat;
+  const m = String(mat || '').match(/^\s*(\d+(?:\.\d+)?)\s*[×xX*]\s*(\d+(?:\.\d+)?)\s*$/); if (!m) return mat;
+  const sz = parseSize(size); if (!sz || sz.l + sz.w <= JOIN) return mat;
+  return `${m[1]}×${Math.ceil(+m[2] / 2)} ×2張`;
+}
 function calcMat(size,kind,layer){
   const s=parseSize(size); if(!s) return '';
   const add = Number(layer)===3 ? 8 : 12;
   const w = kind==='內箱'||kind==='斬式' ? s.w+s.h : kind==='AB式' ? 2*s.w+s.h : kind==='上下蓋' ? s.l+2*s.h : s.w+s.h+2;
   const l = kind==='上下蓋' ? s.w+2*s.h : (s.l+s.w)*2+add;
+  // 一般外箱 長＋寬 超過 270：用兩張紙接，每張長＝(長＋寬)＋一半的加量
+  if (kind==='外箱' && s.l+s.w > JOIN) return `${w}×${s.l+s.w+add/2} ×2張`;
   return `${w}×${l}`;
 }
 function calcMaterial(size,type,P,t){ const sl=type==='outer'?'outer':'inner'; return calcMat(size, kindOf(sl,P||pm,t||boxType), layerOf(sl,P||pm,t||boxType)); }
