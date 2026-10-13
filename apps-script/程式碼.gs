@@ -54,7 +54,7 @@ function doPost(e) {
       // 對到產品時，把層數、印刷帶進看板欄位（Q、R 欄）
       if (data.layer) sheet.getRange(rowNo, BOARD_START + 1).setValue(String(data.layer));
       if (data.print) sheet.getRange(rowNo, BOARD_START + 2).setValue(data.print);
-      // 斬盒→「斬盒」、隔板→「平板紙板」（T 欄成型方式，不經釘箱站）；空字串＝改回一般箱
+      // 斬盒→「斬盒」或「斬盒釘箱」、隔板→「平板紙板」（T 欄成型方式，不經釘箱站）；空字串＝改回一般箱
       if (data.form !== undefined && data.form !== null) sheet.getRange(rowNo, BOARD_START + 4).setValue(data.form);
       if (data.productId && rowIndex < 0) { try { touchProduct(data.productId); } catch (e) {} }
       return ok(rowIndex >= 0 ? '訂單已更新' : '訂單已儲存');
@@ -509,7 +509,7 @@ function setupBoard() {
   dd(1, ['5','3']);
   dd(2, ['是','否']);
   dd(3, ['是','否']);
-  dd(4, ['釘箱','糊箱','平板紙板','斬盒']);
+  dd(4, ['釘箱','糊箱','平板紙板','斬盒','斬盒釘箱']);
   dd(5, ['是','否']);
   sh.getRange(2, BOARD_START + 6, last - 1, 1)
     .setDataValidation(SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(true).build())
@@ -578,15 +578,18 @@ function buildOrder(r, b, sched) {
     const size = String(r[4] || r[7] || '');
     const qty = String(r[6] || r[9] || '');
     const kind = String(b[4] || '釘箱').trim();
-    const layer = Number(b[1]) || (isInner || kind === '斬盒' || /內/.test(r[3]) ? 3 : 5);
+    const layer = Number(b[1]) || (isInner || /^斬盒/.test(kind) || /內/.test(r[3]) ? 3 : 5);
     const hasMark = String(r[11] || '').trim() || String(r[12] || '').trim();
     const print = b[2] === '' ? !!hasMark : isYes(b[2]);
     const slot = b[3] === '' ? kind !== '平板紙板' : isYes(b[3]);
-    const route = [0];
+    let route = [0];
     if (print) route.push(1);
     if (slot) route.push(2);
     if (kind === '釘箱') route.push(3);
     route.push(4);
+    // 斬盒：紙直接送加工廠，不經裁切、印刷、開槽；加工好直接出貨，或回來釘箱再出貨
+    if (kind === '斬盒') route = [4];
+    if (kind === '斬盒釘箱') route = [3, 4];
     const prog = {};
     STATIONS.forEach((s, k) => {
       const v = String(b[7 + k] || '');
