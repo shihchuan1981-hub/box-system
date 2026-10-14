@@ -743,7 +743,7 @@ function prodScore(p, name, size, slot) {
     if (names.includes(nk)) s += 50;
     else if (names.some(x => x.length >= 3 && nk.length >= 3 && (x.includes(nk) || nk.includes(x)))) s += 25;
   }
-  if (p.箱型) s += (slot === 'outer') === OUTER_KINDS.includes(p.箱型) ? 10 : -25;
+  if (p.箱型) s += kindFits(p, slot) ? 10 : -10;   // 箱型不同（例如訂單讀成外箱、產品是內箱）也列出來給老闆點
   return s;
 }
 
@@ -776,7 +776,7 @@ function matchItem(it, list) {
       .filter(x => x.s >= 45)
       .sort((a, b) => b.s - a.s || byRecent(a.p, b.p));
     const top = ranked[0];
-    if (top && top.s >= 60 && (!ranked[1] || ranked[1].s <= top.s - 15)) applyTo(it, slot, top.p, false);
+    if (top && top.s >= 60 && kindFits(top.p, slot) && (!ranked[1] || ranked[1].s <= top.s - 15)) applyTo(it, slot, top.p, false);
     else st.cands = ranked.slice(0, 5).map(x => x.p);
   });
   if (it === curItem()) pm = it._pm;
@@ -801,9 +801,20 @@ function applyTo(it, slot, p, manual) {
 function curOrTemp() { const it = curItem(); if (it) { it._pm = pm; return it; } return {_pm: pm}; }
 function applyProduct(slot, p, manual) { applyTo(curOrTemp(), slot, p, manual); renderPM(); if (typeof renderChips === 'function' && recognizedItems.length > 1) renderChips(); }
 function unmatchProduct(slot) { const st = pm[slot]; st.prod = null; st.picked = true; st.cands = []; st.open = true; renderPM(); }
+const kindFits = (p, slot) => !p.箱型 || (slot === 'outer') === OUTER_KINDS.includes(p.箱型);
 function pickProduct(slot, id) {
   const p = (prodCache[currentCustomer && currentCustomer.id] || []).find(x => x.產品ID === id);
-  if (p) applyProduct(slot, p, true);
+  if (!p) return;
+  // 點到的產品箱型跟這筆不同（例如這筆是外箱、產品是內箱）→ 這筆自動改類型，數量、尺寸跟著搬
+  if (!kindFits(p, slot)) {
+    const t = slot === 'outer' ? (p.箱型 === '隔板' ? 'divider' : 'inner') : (p.箱型 === '斬式' ? 'die' : 'outer');
+    const to = slot === 'outer' ? 'inner' : 'outer';
+    setBoxType(t, true);
+    pm[to].picked = true;
+    applyProduct(to, p, true);
+    return;
+  }
+  applyProduct(slot, p, true);
 }
 function openSearch(slot) { pm[slot].open = true; renderPM(); const q = document.querySelector(`#pm_${slot} .pm-q`); if (q) q.focus(); }
 
@@ -819,7 +830,7 @@ function prodLine(p) {
   return `${esc(p.品名)}<small>${esc([p.箱型, p.尺寸, p.用紙 && '用紙 ' + p.用紙, p.最後出貨 && '上次 ' + p.最後出貨].filter(Boolean).join('・'))}</small>`;
 }
 function candButtons(slot, list) {
-  return `<div class="pm-cands">${list.map(p => `<button type="button" class="pm-cand" onclick="pickProduct('${slot}','${esc(p.產品ID)}')"><b>${prodLine(p)}</b></button>`).join('')}</div>`;
+  return `<div class="pm-cands">${list.map(p => `<button type="button" class="pm-cand" onclick="pickProduct('${slot}','${esc(p.產品ID)}')"><b>${prodLine(p)}</b>${slot !== 'x' && !kindFits(p, slot) ? `<small style="color:var(--warning)">這是${esc(p.箱型)}，點了這筆會改成${slot === 'outer' ? (p.箱型 === '隔板' ? '隔板' : '內盒') : (p.箱型 === '斬式' ? '斬盒' : '外箱')}</small>` : ''}</button>`).join('')}</div>`;
 }
 
 // ═══ 備料建議：用紙 → 找紙板庫存（只建議，不扣庫存） ═══
