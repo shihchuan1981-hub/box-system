@@ -777,7 +777,8 @@ function matchItem(it, list) {
     // 尺寸欄空白時，從品名裡抓尺寸（例如「…外箱 112*83*127」）
     const size = tget(it, SLOT[slot].size).trim() || ((name.match(/\d+(?:\.\d+)?\s*[*xX×]\s*\d+(?:\.\d+)?\s*[*xX×]\s*\d+(?:\.\d+)?/) || [''])[0]);
     if (!size && !name) return;
-    const ranked = list.map(p => ({p, s: prodScore(p, name, size, slot)}))
+    const alt = String(it.item_no || '').trim();   // AI 有時把產品編號（例如 T1-0581）放在 Item No.
+    const ranked = list.map(p => ({p, s: Math.max(prodScore(p, name, size, slot), alt ? prodScore(p, alt, size, slot) : 0)}))
       .filter(x => x.s >= 45)
       .sort((a, b) => b.s - a.s || byRecent(a.p, b.p));
     const top = ranked[0];
