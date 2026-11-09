@@ -737,7 +737,9 @@ function prodScore(p, name, size, slot) {
   let s = 0;
   const sk = sizeKey(size);
   if (sk && sizeKey(p.尺寸) === sk) s += 60;
-  const nk = nameKey(name);
+  // 訂單品名只寫尺寸（例如「115*81*72」）→ 不能拿來比名稱，同尺寸的編號都列出來讓老闆點
+  const sizeOnly = /^[\d.\s*xX×＊+()（）cmCM]+$/.test(String(name || '').trim());
+  const nk = sizeOnly ? '' : nameKey(name);
   if (nk) {
     const names = aliasesOf(p).map(nameKey);
     if (names.includes(nk)) s += 50;
