@@ -741,6 +741,8 @@ function prodScore(p, name, size, slot) {
   if (nk) {
     const names = aliasesOf(p).map(nameKey);
     if (names.includes(nk)) s += 50;
+    // 訂單品名開頭就是產品編號，例如「T1-0053 CP-922外箱 112*83*127」對到「T1-0053」；編號越長越可信
+    else if (names.some(x => x.length >= 4 && nk.startsWith(x))) s += 40 + Math.min(10, Math.max(...names.filter(x => x.length >= 4 && nk.startsWith(x)).map(x => x.length)));
     else if (names.some(x => x.length >= 3 && nk.length >= 3 && (x.includes(nk) || nk.includes(x)))) s += 25;
   }
   if (p.箱型) s += kindFits(p, slot) ? 10 : -10;   // 箱型不同（例如訂單讀成外箱、產品是內箱）也列出來給老闆點
@@ -769,8 +771,9 @@ function matchItem(it, list) {
   slotsOf(it).forEach(slot => {
     const st = it._pm[slot];
     if (st.prod || st.picked) return;
-    const size = tget(it, SLOT[slot].size).trim();
     const name = it._ai || tget(it, 'f_product').trim();
+    // 尺寸欄空白時，從品名裡抓尺寸（例如「…外箱 112*83*127」）
+    const size = tget(it, SLOT[slot].size).trim() || ((name.match(/\d+(?:\.\d+)?\s*[*xX×]\s*\d+(?:\.\d+)?\s*[*xX×]\s*\d+(?:\.\d+)?/) || [''])[0]);
     if (!size && !name) return;
     const ranked = list.map(p => ({p, s: prodScore(p, name, size, slot)}))
       .filter(x => x.s >= 45)
