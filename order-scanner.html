@@ -838,8 +838,10 @@ function searchProducts(slot, q) {
   const list = prodCache[currentCustomer.id] || [];
   const nk = nameKey(q); if (!nk) return [];
   const fit = p => !!p.箱型 && (slot === 'outer') === OUTER_KINDS.includes(p.箱型);
+  // 品名一模一樣的排最前面，再來是開頭一樣的；不然打「5*4」會被一堆「41.5*5.5*4」擠掉
+  const rank = p => { const ns = aliasesOf(p).map(nameKey); return ns.includes(nk) ? 3 : ns.some(n => n.startsWith(nk)) ? 2 : nameKey(p.尺寸) === nk ? 2 : 1; };
   return list.filter(p => aliasesOf(p).some(n => nameKey(n).includes(nk)) || nameKey(p.尺寸).includes(nk))
-    .sort((a, b) => (fit(b) - fit(a)) || byRecent(a, b)).slice(0, 8);
+    .sort((a, b) => (rank(b) - rank(a)) || (fit(b) - fit(a)) || byRecent(a, b)).slice(0, 12);
 }
 
 function prodLine(p) {
@@ -1287,7 +1289,8 @@ function shipSearchRender() {
   const q = $('shipSearch').value.trim(), el = $('shipSearchRes');
   if (!q || !ship.cust) { el.innerHTML = q && !ship.cust ? '<div class="pm-info">請先選客戶</div>' : ''; return; }
   const nk = nameKey(q);
-  const res = (prodCache[ship.cust.id] || []).filter(p => aliasesOf(p).some(n => nameKey(n).includes(nk)) || nameKey(p.尺寸).includes(nk)).slice(0, 8);
+  const rk = p => { const ns = aliasesOf(p).map(nameKey); return ns.includes(nk) ? 3 : ns.some(n => n.startsWith(nk)) ? 2 : 1; };
+  const res = (prodCache[ship.cust.id] || []).filter(p => aliasesOf(p).some(n => nameKey(n).includes(nk)) || nameKey(p.尺寸).includes(nk)).sort((a, b) => rk(b) - rk(a)).slice(0, 12);
   el.innerHTML = res.length ? `<div class="pm-cands">${res.map(p => `<button type="button" class="pm-cand" onclick="addShipProduct('${esc(p.產品ID)}')"><b>${prodLine(p)}</b>${photoList(p).length ? '<small>📷 已有照片</small>' : ''}</button>`).join('')}</div>` : '<div class="pm-info">找不到</div>';
 }
 function addShipProduct(id) {
