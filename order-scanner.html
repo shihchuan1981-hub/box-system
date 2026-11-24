@@ -797,7 +797,11 @@ function applyTo(it, slot, p, manual) {
   const S = SLOT[slot];
   // 訂單的「尺寸」其實是從品名抄來的（例如品名「27*20*5.5*5」，真正紙箱是 100×72×100）→ 用資料庫的尺寸
   const nm = it._ai || tget(it, 'f_product').trim(), osz0 = sizeKey(tget(it, S.size));
-  if (osz0 && sizeKey(p.尺寸) && sizeKey(p.尺寸) !== osz0 && sizeKey(nm) === osz0 && aliasesOf(p).map(nameKey).includes(nameKey(nm))) tset(it, S.size, p.尺寸);
+  const nmk = nameKey(nm), sameName = aliasesOf(p).map(nameKey).some(x => x === nmk || (x.length >= 4 && nmk.startsWith(x)));
+  if (osz0 && sizeKey(p.尺寸) && sizeKey(p.尺寸) !== osz0 && sizeKey(nm) === osz0 && sameName) tset(it, S.size, p.尺寸);
+  // 用紙欄其實是 AI 把尺寸讀成用紙（例如「100×72 ×5張」，產品尺寸 100×72×100）→ 清掉，改帶資料庫用紙
+  const pd = sizeKey(p.尺寸).split('x'), mk = matKey(tget(it, S.mat));
+  if (p.用紙 && mk && pd.length === 3 && mk === pd.slice(0, 2).join('x') && matKey(p.用紙) !== mk) tset(it, S.mat, '');
   const osz = sizeKey(tget(it, S.size));
   if (!osz && p.尺寸) tset(it, S.size, p.尺寸);
   // 尺寸一樣才帶資料庫的用紙；客戶改了尺寸就讓公式重算
