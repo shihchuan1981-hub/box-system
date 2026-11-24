@@ -740,6 +740,8 @@ function prodScore(p, name, size, slot) {
   // 訂單品名只寫尺寸（例如「115*81*72」）→ 不能拿來比名稱，同尺寸的編號都列出來讓老闆點
   const sizeOnly = /^[\d.\s*xX×＊+()（）cmCM]+$/.test(String(name || '').trim());
   const nk = sizeOnly ? '' : nameKey(name);
+  // 品名長得像尺寸（例如「27*20*5.5*5」），但真的有出過貨的產品就叫這個名字 → 還是算名稱一樣
+  if (sizeOnly && nameKey(name) && Number(p.出貨次數) > 0 && aliasesOf(p).map(nameKey).includes(nameKey(name))) s += 70;
   if (nk) {
     const names = aliasesOf(p).map(nameKey);
     if (names.includes(nk)) s += 50;
@@ -792,7 +794,11 @@ function applyTo(it, slot, p, manual) {
   const st = it._pm[slot];
   st.prod = p; st.picked = manual; st.cands = []; st.open = false; st.q = '';
   if (slot === 'outer' || !it._pm.outer.prod) tset(it, 'f_product', p.品名);
-  const S = SLOT[slot], osz = sizeKey(tget(it, S.size));
+  const S = SLOT[slot];
+  // 訂單的「尺寸」其實是從品名抄來的（例如品名「27*20*5.5*5」，真正紙箱是 100×72×100）→ 用資料庫的尺寸
+  const nm = it._ai || tget(it, 'f_product').trim(), osz0 = sizeKey(tget(it, S.size));
+  if (osz0 && sizeKey(p.尺寸) && sizeKey(p.尺寸) !== osz0 && sizeKey(nm) === osz0 && aliasesOf(p).map(nameKey).includes(nameKey(nm))) tset(it, S.size, p.尺寸);
+  const osz = sizeKey(tget(it, S.size));
   if (!osz && p.尺寸) tset(it, S.size, p.尺寸);
   // 尺寸一樣才帶資料庫的用紙；客戶改了尺寸就讓公式重算
   if (!tget(it, S.mat).trim() && p.用紙 && (!osz || osz === sizeKey(p.尺寸))) tset(it, S.mat, slot === 'outer' ? splitMat(p.用紙, tget(it, S.size) || p.尺寸, p.箱型 || '外箱', p.層數 || 5) : p.用紙);
