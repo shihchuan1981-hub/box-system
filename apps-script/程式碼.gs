@@ -88,6 +88,31 @@ function doPost(e) {
       return ok(deleteCustomer(data.customerId, data.name));
     }
 
+    // 復原剛剛存的：刪掉這幾筆訂單列，產品的最後出貨、出貨次數改回存之前的值
+    if (action === 'undoOrders') {
+      const lock = LockService.getScriptLock(); lock.waitLock(20000);
+      try {
+        const sheet = ss.getSheetByName('訂單紀錄');
+        const ids = (data.orderIds || []).map(String);
+        const rows = sheet.getDataRange().getValues();
+        let n = 0;
+        for (let i = rows.length - 1; i >= 1; i--) {
+          if (ids.indexOf(String(rows[i][0])) >= 0) { sheet.deleteRow(i + 1); n++; }
+        }
+        (data.products || []).forEach(p => {
+          try {
+            const sh = prodSheet();
+            const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+            const rowNo = findProductRow(sh, p.id); if (rowNo < 0) return;
+            const lc = h.indexOf('最後出貨') + 1, nc = h.indexOf('出貨次數') + 1;
+            if (lc) sh.getRange(rowNo, lc).setNumberFormat('@').setValue(p.last || '');
+            if (nc) sh.getRange(rowNo, nc).setValue(Number(p.count) || 0);
+          } catch (e) {}
+        });
+        return ok({deleted: n});
+      } finally { lock.releaseLock(); }
+    }
+
     if (action === 'updateOrderStatus') {
       const sheet = ss.getSheetByName('訂單紀錄');
       const rows = sheet.getDataRange().getValues();

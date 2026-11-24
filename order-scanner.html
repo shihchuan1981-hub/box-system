@@ -358,6 +358,7 @@ tr:hover td{background:var(--accent-light)}
 
   <div class="btn-row" id="saveRow" style="display:none">
     <button class="btn btn-success" id="saveBtn">☁ 儲存到試算表</button>
+    <button class="btn btn-danger" id="undoBtn" style="display:none;flex:1 1 100%;justify-content:center;font-size:16px;font-weight:700;padding:12px" onclick="undoLastSave()">↩ 按錯了，復原剛剛存的</button>
     <button class="btn btn-primary" id="printBtn">🖨 列印派工單</button>
     <button class="btn btn-secondary" id="exportBtn">⬇ 匯出 CSV</button>
   </div>
@@ -1618,6 +1619,7 @@ uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.r
 fileInput.addEventListener('change',()=>{if(fileInput.files[0])handleFile(fileInput.files[0])});
 
 function handleFile(file){
+  lastSave=null; $('undoBtn').style.display='none';
   resetSched();
   editingOrderId=null;
   recognizedItems=[]; recognizedIndex=0;
@@ -1850,9 +1852,31 @@ function buildRows(d, id){
   if (hasInner) return [{...innerRow, orderId:id, product:d._pm&&d._pm.inner.prod ? d._pm.inner.prod.品名 : d.product}];
   return [{...outerRow, orderId:id}];
 }
+// 最近一次存檔：存了哪幾列、哪幾筆品項、產品原本的出貨紀錄（按「復原」用）
+let lastSave = null;
+function beginSave(){ lastSave = {ids:[], items:[], prods:{}}; $('undoBtn').style.display='none'; }
+function noteProducts(P){ if(!lastSave || !P) return; ['outer','inner'].forEach(sl=>{ const p=P[sl]&&P[sl].prod; if(p && !lastSave.prods[p.產品ID]) lastSave.prods[p.產品ID]={p, last:p.最後出貨||'', count:p.出貨次數||'0'}; }); }
 async function postRows(rows){
   let r;
-  for (const row of rows) { r=await gasPost(row); if(!r.success) throw new Error(r.error||'儲存失敗'); }
+  for (const row of rows) { r=await gasPost(row); if(!r.success) throw new Error(r.error||'儲存失敗'); if(lastSave) lastSave.ids.push(row.orderId); }
+}
+function showUndo(){ if(lastSave && lastSave.ids.length){ $('undoBtn').style.display=''; $('undoBtn').disabled=false; $('undoBtn').textContent=`↩ 按錯了，復原剛剛存的 ${lastSave.ids.length} 列`; } }
+async function undoLastSave(){
+  const L=lastSave; if(!L || !L.ids.length) return;
+  if(!confirm(`要把剛剛存的 ${L.ids.length} 列從試算表刪掉嗎？\n（產品的出貨次數也會改回去）`)) return;
+  const b=$('undoBtn'); b.disabled=true; b.textContent='復原中…';
+  try{
+    const prods=Object.values(L.prods);
+    const r=await gasPost({action:'undoOrders', orderIds:L.ids, products:prods.map(x=>({id:x.p.產品ID, last:x.last, count:x.count}))});
+    if(!r.success) throw new Error(r.error||'復原失敗');
+    prods.forEach(x=>{ x.p.最後出貨=x.last; x.p.出貨次數=x.count; });
+    L.items.forEach(it=>{ it._saved=false; });
+    lastSave=null; b.style.display='none';
+    if(recognizedItems.length>1) renderChips();
+    saveBtnState();
+    showStatus('success', `↩ 已復原，刪掉 ${r.data && r.data.deleted!=null ? r.data.deleted : ''} 列。可以改好再存一次`);
+    bigToast(true,'已復原','剛剛存的已刪掉');
+  }catch(e){ b.disabled=false; b.textContent='↩ 再試一次復原'; showStatus('error','復原失敗：'+esc(e.message)); bigToast(false,'復原失敗',plain(e.message)); }
 }
 function markRecent(name){
   const n = Object.keys(recent).length + 1;
@@ -1871,9 +1895,12 @@ $('saveBtn').addEventListener('click', async()=>{
   if($('saveBtn').disabled) return;          // 存檔中，避免連按存兩次
   showStatus('loading', isEdit ? '更新試算表中...' : '儲存到 Google 試算表...');
   saveBtnState('busy');
+  if(isEdit){ lastSave=null; $('undoBtn').style.display='none'; } else { beginSave(); }
   try{
     if(!isEdit) await ensureProducts(d);
+    noteProducts(d._pm);
     await postRows(buildRows(d, 'O'+Date.now()));
+    if(!isEdit && d._item) lastSave.items.push(d._item);
     markRecent(d.customer); if(!isEdit) markProductsUsed(d._pm); rememberPrint(d._item, d._pm);
     if(!isEdit){ try{ const n=await uploadPending(d); if(n) showStatus('loading','麥頭照片已上傳…'); }catch(pe){ alert('訂單已存好，但麥頭照片上傳失敗：'+pe.message+'\n\n照片還留在這一筆，修好後按「重試上傳」就好，不用重拍。'); setTimeout(renderMk,50); } }
     if (isEdit) {
@@ -1883,6 +1910,7 @@ $('saveBtn').addEventListener('click', async()=>{
       return;
     }
     const it=recognizedItems[recognizedIndex]; if(it){ formToItem(); it._saved=true; it._skip=false; }
+    setTimeout(showUndo);
     const total=recognizedItems.length;
     const nextIdx=recognizedItems.findIndex((x,i)=>i>recognizedIndex && !x._saved && !x._skip);
     const savedN = recognizedItems.indexOf(it)+1;
@@ -1905,7 +1933,7 @@ async function saveAll(){
   if(needCustomer(d0)) return;
   const todo=recognizedItems.map((it,i)=>i).filter(i=>!recognizedItems[i]._saved && !recognizedItems[i]._skip);
   if(!todo.length) return;
-  $('saveAllBtn').disabled=true; saveBtnState('busy');
+  $('saveAllBtn').disabled=true; saveBtnState('busy'); beginSave();
   const ts=Date.now(); let done=0; const photoFails=[];
   try{
     for (const i of todo){
@@ -1913,7 +1941,9 @@ async function saveAll(){
       fillForm(recognizedItems[i]);
       const d={...getFormData(), customer:d0.customer, _pm:recognizedItems[i]._pm||null, _item:recognizedItems[i]};
       await ensureProducts(d);
+      noteProducts(d._pm);
       await postRows(buildRows(d, 'O'+ts+'-'+(i+1)));
+      lastSave.items.push(recognizedItems[i]);
       markProductsUsed(d._pm); rememberPrint(d._item, d._pm);
       try{ await uploadPending(d); }catch(pe){ photoFails.push(`第 ${i+1} 筆：${pe.message}`); }
       recognizedItems[i]._saved=true; done++;
@@ -1921,12 +1951,12 @@ async function saveAll(){
     markRecent(d0.customer);
     showRecognizedItem(todo[todo.length-1]);
     showStatus(photoFails.length?'warning':'success', `✓ ${done} 筆都存好了${getSchedChoice().date?'，也排好程了':''}${photoFails.length?`。但有 ${photoFails.length} 張麥頭照片沒上傳成功（${photoFails.join('；')}），可以到「📷 出貨麥頭」補拍`:''}`);
-    saveBtnState('done');
+    saveBtnState('done'); showUndo();
     bigToast(true, `${done} 筆都存好了`, photoFails.length ? `但有 ${photoFails.length} 張照片沒傳上去` : '');
   }catch(e){
     showRecognizedItem(todo[done]||recognizedIndex);
     showStatus('error', `存到第 ${done+1} 筆時失敗：${e.message}。已存好的 ${done} 筆不會重複存，再按一次「一起存」即可。`);
-    saveBtnState(); bigToast(false, `第 ${done+1} 筆沒存成功`, `已存好 ${done} 筆，再按一次「一起存」即可`);
+    saveBtnState(); showUndo(); bigToast(false, `第 ${done+1} 筆沒存成功`, `已存好 ${done} 筆，再按一次「一起存」即可`);
   }
   renderChips();
 }
