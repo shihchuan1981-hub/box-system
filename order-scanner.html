@@ -603,9 +603,11 @@ function moveHl(d) {
 })();
 
 // 選定客戶。loadMarks=true 會把這家的麥頭範本帶進正嘜、側嘜
+let batchCustId = '';   // 這張單（同一次辨識）選定的客戶
 function setCustomer(id, loadMarks) {
   const c = customers.find(x => x.id === id); if (!c) return;
   currentCustomer = c;
+  if (!editingOrderId && recognizedItems.length) batchCustId = c.id;
   $('f_customer_sel').value = c.id;
   $('f_customer_q').value = c.name;
   $('f_customer_q').classList.add('picked');
@@ -1652,6 +1654,9 @@ async function analyze(){
     if(!r.success) throw new Error(r.error||'辨識失敗');
     recognizedItems=Array.isArray(r.data)?r.data:[r.data];
     recognizedItems.forEach(it=>{ it._ai=String(it.product||'').trim(); });
+    batchCustId='';
+    // 同一張單：客戶、單號、訂貨日、交貨日 只寫在第一筆時，後面幾筆照抄
+    ['customer','order_no','order_date','delivery_date'].forEach(k=>{ const v=(recognizedItems.find(x=>String(x[k]||'').trim())||{})[k]; if(v) recognizedItems.forEach(x=>{ if(!String(x[k]||'').trim()) x[k]=v; }); });
     // 同一筆同時有外箱和內盒 → 拆成兩筆（品名後加「外箱」「內盒」）
     recognizedItems = recognizedItems.flatMap(it => guessType(it)!=='both' ? [it] : [
       {...it, _type:'outer', product:(it.product||'')+' 外箱', inner_size:'', inner_qty:'', inner_material:'', inner_sheets:'', inner_mark:''},
@@ -1670,12 +1675,15 @@ function showRecognizedItem(idx){
   recognizedIndex=idx;
   const item=recognizedItems[idx];
   // 同一張訂單的下一筆品項，客戶通常一樣，已經選好就不要重選
-  const keep = idx>0 && currentCustomer;
+  // 這張單已經選過客戶（不管在哪一筆選的）→ 每一筆都用同一家
+  const batch = batchCustId && customers.find(c => c.id === batchCustId);
+  const keep = (idx>0 || batch) && currentCustomer && (!batch || currentCustomer.id === batch.id);
   if (!keep) clearCustomer();
   fillForm(item);
   pm = item._pm = item._pm || newPM();
-  if (!keep) autoMatchCustomer(item.customer||'');
-  else refreshProducts();
+  if (keep) refreshProducts();
+  else if (batch) setCustomer(batch.id, false);
+  else autoMatchCustomer(item.customer||'');
   const nav=$('multiNav');
   if(recognizedItems.length>1){
     nav.classList.add('show');
