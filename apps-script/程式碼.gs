@@ -135,6 +135,11 @@ function doPost(e) {
       return ok(analyzeOrder(data.fileBase64, data.mediaType));
     }
 
+    // 老闆修正過 AI 讀錯的欄位 → 記到「辨識修正紀錄」分頁，之後用來補客戶讀單筆記
+    if (action === 'saveCorrections') {
+      return ok(saveCorrections(data.customer, data.product, data.list));
+    }
+
   } catch(err) {
     return ContentService
       .createTextOutput(JSON.stringify({success:false, error:err.message}))
@@ -392,6 +397,94 @@ function readShipment(fileBase64, mediaType) {
   catch (e) { throw new Error('AI 回傳格式無法解析：' + text); }
 }
 
+// ═══ 客戶讀單筆記 + 辨識修正紀錄 ═══
+// 「客戶讀單筆記」分頁：A 客戶名稱、B 讀單規則（白話寫）、C 啟用（空白＝啟用，填「停用」就不用）
+// 「辨識修正紀錄」分頁：老闆每次改過 AI 讀的欄位，網頁自動記一筆，之後拿來補筆記
+// 第一次使用：在編輯器選 setupNotes → 執行（會建兩個分頁，並放進豐錥的筆記）
+const NOTES_SHEET = '客戶讀單筆記';
+const FIX_SHEET = '辨識修正紀錄';
+
+function getReadingNotes() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(NOTES_SHEET);
+  if (!sh || sh.getLastRow() < 2) return '';
+  const v = sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues();
+  const blocks = [];
+  v.forEach(r => {
+    const name = String(r[0] || '').trim(), rule = String(r[1] || '').trim(), on = String(r[2] || '').trim();
+    if (!name || !rule || /^(停用|否|no?|0|false)$/i.test(on)) return;
+    blocks.push('▼ ' + name + '\n' + rule);
+  });
+  return blocks.join('\n\n');
+}
+
+function correctionSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(FIX_SHEET);
+  if (!sh) sh = ss.insertSheet(FIX_SHEET);
+  if (sh.getLastRow() === 0) {
+    sh.appendRow(['時間', '客戶', '品名（AI 讀的）', '欄位', 'AI 讀成', '老闆改成']);
+    sh.getRange(1, 1, 1, 6).setFontWeight('bold').setBackground('#fdf6e8');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function saveCorrections(customer, product, list) {
+  if (!Array.isArray(list) || !list.length) return '沒有修正';
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sh = correctionSheet();
+    const t = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/M/d HH:mm');
+    const cut = x => String(x === null || x === undefined ? '' : x).slice(0, 500);
+    const rows = list.slice(0, 40).map(x => [t, cut(customer), cut(product), cut(x.field), cut(x.ai), cut(x.fixed)]);
+    const rng = sh.getRange(sh.getLastRow() + 1, 1, rows.length, 6);
+    rng.setNumberFormat('@').setValues(rows);
+    return '已記錄 ' + rows.length + ' 筆修正';
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+const NOTE_FENGYAO = `【怎麼認】單上 FROM 寫「豐錥」的就是這家；TO 寫「廣源」是我們自己，不是客戶。customer 填「豐錥」。「採購人」不用理。
+【三種版面】規則都一樣：
+ A. 每格左邊是客戶標誌圖，右邊是 B500404、58355、N.W.、G.W.、MADE IN TAIWAN
+ B. 每格有 PO#、ITEM#、Q'TY、N.W.、G.W.、MEAS.、C/NO、WAREHOUSE、MADE IN TAIWAN，下面一行寫「外箱:」
+ C. 表頭分「正麥」「側麥」兩欄，下面一行寫「尺寸」
+1. 每一個麥頭格是一個品項，一格輸出一個物件，不要合併、不要漏。
+2. 品名和數量：每格正下方有一行，例如「尺寸 27X20X5.5X5入X10只 (26333.033)」、「外箱: 30X20X10X2入X10」、「尺寸 3X4X20只 (26852.128.010A)」。product 整行照抄（含括號裡的料號）。outer_qty 填這一行最後面的數字（X10只→10、2入X18→18）。
+3. 麥頭格裡面的 Q'TY、PCS、KGS、C/NO、MEAS. 都不是訂單數量，不要填進 outer_qty。
+4. 外箱尺寸和用紙：這一行的右邊（或下方）有藍色手寫字。寫成「長×寬×高」的（例如 110×72×72）是外箱尺寸，填 outer_size；「=」後面的兩個數字（例如 =174×356）是用紙，填 outer_material（寫成 174×356）。手寫字被切掉或沒寫完，就只填看得清楚的。這一行裡面的 27X20X5.5、30X20X10 是裝進去的產品尺寸，不是外箱尺寸，不要填進 outer_size。
+5. 麥頭：版面 A、B 把整個格子的內容抄進 front_mark（版面 A 標誌上的字也寫出來）；版面 C 的「正麥」欄抄進 front_mark，「側麥」欄抄進 side_mark。
+6. 麥頭裡的 ITEM#（例如 BP949412830）或第一行編號（例如 B500404）填 item_no。
+7. 日期：「採購日期」是訂貨日 order_date，「交期」「交貨日期」是交貨日 delivery_date。只寫月/日時，年份用今年。「採購單號」通常是空的，order_no 留空。
+8. 手寫「上下蓋內盒」是另一個品項（內盒）：product 寫「上下蓋內盒」；手寫三個數字（例如 149×76×36）是 inner_size；「=」後面的兩個數字（例如 =221×148）是 inner_material；寫在「45×23×11=」後面的單一數字（例如 72）是 inner_qty。這個品項的 outer_* 全部留空。
+9. 右上角的 P.1、頁碼，和最下面手寫的「#1-400」不用理。`;
+
+function setupNotes() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(NOTES_SHEET);
+  if (!sh) sh = ss.insertSheet(NOTES_SHEET);
+  if (sh.getLastRow() === 0) {
+    sh.appendRow(['客戶名稱', '讀單規則（用白話寫，AI 照這個讀）', '啟用（空白＝啟用，填「停用」就不用）']);
+    sh.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#fdf6e8');
+    sh.setColumnWidth(1, 120); sh.setColumnWidth(2, 760); sh.setColumnWidth(3, 150);
+    sh.setFrozenRows(1);
+  }
+  sh.getRange(2, 1, 300, 3).setVerticalAlignment('top');
+  sh.getRange(2, 2, 300, 1).setWrap(true);
+  const names = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().map(r => String(r[0]).trim()) : [];
+  let msg = '';
+  if (names.indexOf('豐錥') < 0) {
+    sh.getRange(sh.getLastRow() + 1, 1, 1, 3).setValues([['豐錥', NOTE_FENGYAO, '']]);
+    msg = '已放進豐錥的筆記。';
+  } else {
+    msg = '豐錥的筆記已經有了，沒有動它。';
+  }
+  correctionSheet();
+  try { SpreadsheetApp.getUi().alert('客戶讀單筆記、辨識修正紀錄兩個分頁都準備好了。' + msg); } catch (e) {}
+}
+
 // ── AI 辨識：伺服器端呼叫 Claude API，金鑰不暴露給瀏覽器 ──
 function analyzeOrder(fileBase64, mediaType) {
   const apiKey = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
@@ -401,6 +494,14 @@ function analyzeOrder(fileBase64, mediaType) {
   const mt = mediaType === 'application/pdf' ? 'application/pdf' : (mediaType || 'image/jpeg');
   const contentType = mt === 'application/pdf' ? 'document' : 'image';
   const year = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy');
+  // 各客戶的讀單筆記（試算表「客戶讀單筆記」分頁）；讀不到也不影響辨識
+  let notesBlock = '';
+  try {
+    const notes = getReadingNotes();
+    if (notes) notesBlock =
+      '【客戶專屬讀單筆記】先看這張單是哪一家客戶。下面有那家客戶的筆記，就以筆記為準（筆記和上面的通則不同時，聽筆記的）；沒有筆記的客戶照上面的通則讀。\n' +
+      notes + '\n【筆記結束】\n';
+  } catch (e) {}
   const prompt =
     '你是台灣紙箱工廠的訂單辨識助手。這張是客戶的紙箱訂製單，可能有一筆或多筆品項。\n' +
     '請照下面規則讀，每個品項輸出一個物件：\n' +
@@ -423,6 +524,7 @@ function analyzeOrder(fileBase64, mediaType) {
     '6. 麥頭：正嘜、側嘜照原本換行抄，每行之間用 \\n。側嘜表格裡有填數字的，要把數字填進對應的標題後面（不要放到 notes）；沒填的變數（例如 Q\'TY:、N.W.:）照樣保留標題。正嘜是圖案 LOGO 時，寫出 LOGO 上的文字。\n' +
     '7. 內盒印刷：訂單上有「內盒印刷」（表格欄位或下方區塊）就代表內盒要印刷，把內容寫進 inner_mark，例如「ITEM NO : LNL65107\\nQ\'TY : 10 PCS」（表格裡的值要填進去）。沒有內盒印刷就填空字串。\n' +
     '8. 看不清楚的欄位填空字串，不要猜。\n' +
+    notesBlock +
     '只回傳 JSON 陣列，不要任何說明文字或 markdown：\n' +
     '[{"customer":"客戶名稱","order_no":"訂單號碼","order_date":"訂貨日期","delivery_date":"交貨日期",' +
     '"product":"品名","item_no":"Item No.","barcode":"條碼",' +

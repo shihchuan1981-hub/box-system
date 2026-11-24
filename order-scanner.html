@@ -723,7 +723,8 @@ const layerOf = (slot, P = pm, t = boxType) => Number(P && P[slot].prod && P[slo
 const curItem = () => editingOrderId ? null : recognizedItems[recognizedIndex];
 // 讀寫一筆品項的欄位：畫面上這一筆讀表單，其他筆讀資料
 const tget = (it, id) => it === curItem() ? $(id).value : (it[FKEY[id]] || '');
-const tset = (it, id, v) => { if (it === curItem()) $(id).value = v; else it[FKEY[id]] = v; };
+// 系統自動帶入的值（對到產品時）記在 it._sys，記錄「老闆修正」時才不會把系統自己改的算成老闆改的
+const tset = (it, id, v) => { if (it) (it._sys = it._sys || {})[FKEY[id]] = String(v ?? ''); if (it === curItem()) $(id).value = v; else it[FKEY[id]] = v; };
 const typeOf = it => it === curItem() ? boxType : (it._type || guessType(it));
 const slotsOf = it => { const t = typeOf(it); return isOut(t) ? ['outer'] : isIn(t) ? ['inner'] : ['outer', 'inner']; };
 
@@ -1663,6 +1664,7 @@ async function analyze(){
     recognizedItems = recognizedItems.flatMap(it => guessType(it)!=='both' ? [it] : [
       {...it, _type:'outer', product:(it.product||'')+' 外箱', inner_size:'', inner_qty:'', inner_material:'', inner_sheets:'', inner_mark:''},
       {...it, _type:'inner', product:(it.product||'')+' 內盒', outer_size:'', outer_qty:'', outer_material:'', outer_sheets:'', front_mark:'', side_mark:''}]);
+    recognizedItems.forEach(it=>{ it._orig=snapOrig(it); });   // 記下 AI 原本讀到的值，存檔時比對老闆改了哪裡
     editingOrderId=null;
     saveBtnState();
     showRecognizedItem(0);
@@ -1888,6 +1890,42 @@ function needCustomer(d){
   $('f_customer_q').scrollIntoView({block:'center'}); $('f_customer_q').focus(); return true;
 }
 
+// ═══ 記錄老闆修正過的欄位（寫到試算表「辨識修正紀錄」，之後拿來補客戶讀單筆記） ═══
+// AI 原本讀到的值（和 fillForm 放進畫面的格式一樣）
+function snapOrig(it){
+  const od=normDate(it.order_date);
+  return {order_no:it.order_no||'', order_date:od, delivery_date:normDate(it.delivery_date, od), product:it.product||'',
+    outer_qty:it.outer_qty||'', outer_size:it.outer_size||'', outer_material:joinMaterial(it.outer_material,it.outer_sheets),
+    inner_qty:it.inner_qty||'', inner_size:it.inner_size||'', inner_material:joinMaterial(it.inner_material,it.inner_sheets),
+    front_mark:it.front_mark||it.mark||'', side_mark:it.side_mark||'', inner_mark:it.inner_mark||'', notes:it.notes||''};
+}
+// 存檔前呼叫（buildRows 會清掉用不到的欄位）：比對 AI 原值和要存的值，回傳老闆改過的欄位
+function collectCorrections(d, it){
+  try{
+    if(!it || !it._orig || editingOrderId) return [];
+    const o=it._orig, sys=it._sys||{}, nz=s=>String(s==null?'':s).replace(/\s+/g,' ').trim();
+    const cust=customers.find(c=>c.id===d.customerId), tpl=!!(cust&&(cust.frontMark||cust.sideMark));
+    const inOnly=isIn(d._type), outOnly=isOut(d._type), out=[];
+    [['order_no','訂單號碼'],['order_date','訂貨日期'],['delivery_date','交貨日期'],['product','品名'],
+     ['outer_qty','外箱數量'],['outer_size','外箱尺寸'],['outer_material','外箱用紙'],
+     ['inner_qty','內盒數量'],['inner_size','內盒尺寸'],['inner_material','內盒用紙'],
+     ['front_mark','正嘜'],['side_mark','側嘜'],['inner_mark','內盒印刷'],['notes','備註']].forEach(([k,label])=>{
+      if(inOnly && /^(outer_|front_|side_)/.test(k)) return;
+      if(outOnly && /^inner_/.test(k)) return;
+      if(tpl && (k==='front_mark'||k==='side_mark')) return;      // 麥頭是客戶範本帶進來的，不算老闆改的
+      const a=nz(o[k]), b=nz(d[k]);
+      if(a===b) return;
+      if(sys[k]!==undefined && b===nz(sys[k])) return;             // 是系統對到產品後自動帶的
+      out.push({field:label, ai:o[k]||'', fixed:d[k]||''});
+    });
+    return out;
+  }catch(e){ return []; }
+}
+function sendCorrections(d, it, list){
+  if(!list || !list.length) return;
+  gasPost({action:'saveCorrections', customer:d.customer, product:(it&&it._orig&&it._orig.product)||d.product, list}).catch(()=>{});
+}
+
 $('saveBtn').addEventListener('click', async()=>{
   const d=getFormData();
   if(needCustomer(d)) return;
@@ -1899,7 +1937,9 @@ $('saveBtn').addEventListener('click', async()=>{
   try{
     if(!isEdit) await ensureProducts(d);
     noteProducts(d._pm);
+    const fix = isEdit ? [] : collectCorrections(d, d._item);
     await postRows(buildRows(d, 'O'+Date.now()));
+    sendCorrections(d, d._item, fix);
     if(!isEdit && d._item) lastSave.items.push(d._item);
     markRecent(d.customer); if(!isEdit) markProductsUsed(d._pm); rememberPrint(d._item, d._pm);
     if(!isEdit){ try{ const n=await uploadPending(d); if(n) showStatus('loading','麥頭照片已上傳…'); }catch(pe){ alert('訂單已存好，但麥頭照片上傳失敗：'+pe.message+'\n\n照片還留在這一筆，修好後按「重試上傳」就好，不用重拍。'); setTimeout(renderMk,50); } }
@@ -1942,7 +1982,9 @@ async function saveAll(){
       const d={...getFormData(), customer:d0.customer, _pm:recognizedItems[i]._pm||null, _item:recognizedItems[i]};
       await ensureProducts(d);
       noteProducts(d._pm);
+      const fix = collectCorrections(d, d._item);
       await postRows(buildRows(d, 'O'+ts+'-'+(i+1)));
+      sendCorrections(d, d._item, fix);
       lastSave.items.push(recognizedItems[i]);
       markProductsUsed(d._pm); rememberPrint(d._item, d._pm);
       try{ await uploadPending(d); }catch(pe){ photoFails.push(`第 ${i+1} 筆：${pe.message}`); }
