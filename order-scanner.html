@@ -96,6 +96,7 @@ header .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11p
 .stk{background:#f6f8fb;border-left:5px solid #9fb3c8}.stk-head{font-size:13px;font-weight:700;color:var(--ink)}
 .stk-row{font-size:13px;margin-top:6px;padding:7px 10px;border:1px solid var(--border);border-radius:4px;background:#fff;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline}
 .stk-row b{font-size:15px}.stk-ok{color:var(--success);font-weight:700}.stk-short{color:var(--warning);font-weight:700}.stk-buy{color:var(--accent);font-weight:700;margin-top:6px;font-size:13px}
+.pord{margin-top:8px;padding:8px 10px;border:1px dashed #9fb3c8;border-radius:4px;background:#fff;font-size:13px}.pord b{font-size:15px;color:var(--accent)}.pord .tip{color:var(--warning);font-weight:700;margin-top:4px}.pord .alt{color:var(--muted,#777);font-size:12px;margin-top:4px}
 .stk-rot{font-size:11px;padding:1px 6px;border-radius:3px;background:var(--warning-light);color:var(--warning);border:1px solid #f6cc7a}
 .die-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px;font-size:13px;color:var(--ink-light)}
 .multi-nav.show{display:flex;flex-wrap:wrap;gap:8px}
@@ -874,6 +875,92 @@ async function loadStock() {
   try { const r = await fetch(`${GAS_URL}?action=getStock`); const d = await r.json(); if (d.success && Array.isArray(d.data)) stock = d.data; } catch (e) {}
   renderStock();
 }
+// ═══ 訂紙計算：依紙廠規則，算出每張訂單該訂的紙寬、米數，並提醒未達最低量／加價 ═══
+// 單位：紙寬、紙長都是台分；米數是公尺。1 台分 = 10/3.3 mm ≈ 3.0303 mm
+const TAIFEN_M = 10 / 3.3 / 1000;   // 1 台分 = 幾公尺
+
+// 各紙廠規則（資料表）。新增廠商就照樣加一份。
+const PAPER_VENDORS = {
+  huafeng: {
+    name: '華豐',
+    // [紙寬台分, 最少米數, 備註]
+    widths: [
+      [264,90],[281,60],[297,60],[313,60],[330,60],[347,60],[363,60],[379,60],[396,60],[412,60],
+      [429,45],[446,45],[462,45],[479,45],[495,45],[512,45],[528,45],
+      [545,30],[561,30],[578,30],[594,30],[611,30,'special'],[627,30],[644,30,'special'],[660,30],
+      [677,30,'special'],[693,30],[710,30,'special'],[726,30],[759,30],[792,30],[825,30]
+    ],
+    specialMinArea: 1000,   // 611、644、677、710：累計 1000㎡ 以上才開放
+    mustSplitFrom: 429,     // 運輸關係：紙寬 429 以上要剖開（至少 2 條）
+    minSlit: 89,            // 最小可剖紙寬
+    minCut: 190, maxCut: 1254,   // 紙長（裁切長度）範圍
+    smallArea: 100, smallFee: 1, // 單筆未滿 100㎡，每㎡加 1 元
+    trim: 6,                // 修邊：整條紙寬要留 6 台分（老闆確認）
+    maxLanes: 2             // 華豐最多剖 2 條（老闆確認）；其他廠商不設限就不要寫
+  }
+};
+
+// A＝我們要的紙寬（台分），B＝紙長（台分），qty＝箱數，per＝一個箱要幾張（二片接＝2）
+function calcPaperOrder({A, B, qty, per = 1, vendor = 'huafeng'}) {
+  const V = PAPER_VENDORS[vendor], tips = [], warn = [];
+  const pieces = Math.ceil(qty * per);
+  if (!(A > 0 && B > 0 && pieces > 0)) return {ok:false, warn:['尺寸或數量不完整，無法算訂紙']};
+  if (B > V.maxCut) return {ok:false, warn:[`紙長 ${B} 超過${V.name}最長 ${V.maxCut} 台分，切不了`]};
+  // 紙長太短：訂 2 倍（或更多倍）長，收到後自己裁
+  let mult = 1;
+  if (B < V.minCut) { mult = Math.ceil(V.minCut / B); warn.push(`紙長 ${B} 比${V.name}最短 ${V.minCut} 台分還短，要訂 ${B*mult} 長，收到後一張裁 ${mult} 片`); }
+  const cut = B * mult;
+  if (cut > V.maxCut) return {ok:false, warn:[`紙長 ${cut} 超過${V.name}最長 ${V.maxCut} 台分`]};
+  const lane = Math.max(A, V.minSlit);
+  if (A < V.minSlit) warn.push(`紙寬 ${A} 比最小可剖寬度 ${V.minSlit} 還窄，照 ${V.minSlit} 算，收到後自己再裁`);
+  const rowM = cut * TAIFEN_M;                      // 一排（一個紙長）占幾公尺
+
+  const cands = [];
+  V.widths.forEach(([W, minM, tag]) => {
+    let k = Math.floor((W - V.trim) / lane);        // 能剖幾條
+    if (V.maxLanes) k = Math.min(k, V.maxLanes);
+    if (k < 1) return;
+    if (W >= V.mustSplitFrom && k < 2) return;      // 429 以上一定要剖開
+    const rows = Math.ceil(pieces / (k * mult));
+    const needM = rows * rowM;
+    let orderM = Math.max(Math.ceil(needM - 1e-9), minM);
+    const Wm = W * TAIFEN_M;
+    if (tag === 'special' && Wm * orderM < V.specialMinArea) orderM = Math.ceil(V.specialMinArea / Wm);
+    const area = Wm * orderM;
+    const got = Math.floor(orderM / rowM + 1e-9) * k * mult;   // 訂這麼多米實際能做幾片
+    cands.push({W, mm: Math.round(W*10/3.3), k, lane, trim: W - k*lane, minM, needM, orderM, area, got,
+                extra: got - pieces, special: tag === 'special', split: W >= V.mustSplitFrom});
+  });
+  if (!cands.length) return {ok:false, warn:[`${V.name}沒有能裁出紙寬 ${A} 的寬度（429 以上要剖開，最寬 825）。要換廠，或把紙轉向`]};
+  // 選法：訂的總面積最小（最省紙）→ 再比多出的片數少 → 寬度小
+  cands.sort((a,b) => (a.area - b.area) || (a.extra - b.extra) || (a.W - b.W));
+  const c = cands[0];
+  // 提醒
+  if (c.needM < c.minM - 1e-9)
+    tips.push(`未達最低量：這張單只要約 ${c.needM.toFixed(1)} 米，${V.name}${c.W}台分最少 ${c.minM} 米 → 要訂 ${c.minM} 米，多出 ${c.extra} 片`);
+  if (c.special) tips.push(`${c.W} 台分要累計 ${V.specialMinArea}㎡ 以上才開放受訂，已拉高到 ${c.orderM} 米，建議改選別的寬度`);
+  c.fee = 0;
+  if (c.area < V.smallArea) {
+    c.fee = Math.round(c.area * V.smallFee);
+    const needMore = Math.ceil(V.smallArea / (c.W * TAIFEN_M)) - c.orderM;
+    tips.push(`未滿 ${V.smallArea}㎡（約 ${c.area.toFixed(0)}㎡），每㎡加 ${V.smallFee} 元，約加價 NT$${c.fee}；再多訂 ${needMore} 米就滿 ${V.smallArea}㎡免加價，或和同寬度的單合併成一筆訂（可以合併）`);
+  }
+  if (c.split) tips.push(`${c.W} 台分${V.name}要剖開：剖 ${c.k} 條，每條 ${c.lane}，剩 ${c.trim} 台分（含修邊 6）`);
+  else if (c.k > 1) tips.push(`剖 ${c.k} 條，每條 ${c.lane}，剩 ${c.trim} 台分（含修邊 6）`);
+  return {ok:true, vendor:V.name, pieces, cut, mult, best:c, others:cands.slice(1,3), tips, warn};
+}
+
+// 訂紙建議：算出要向紙廠訂幾台分、幾米，並提醒未達最低量／加價
+function paperOrderHTML(nd, pieces, label) {
+  if (!pieces) return '';
+  const r = calcPaperOrder({A: nd.A, B: nd.B, qty: pieces, per: 1});
+  if (!r.ok) return `<div class="pord"><div class="stk-head">📄 訂紙建議${label || ''}</div>${r.warn.map(w => `<div class="tip">⚠ ${esc(w)}</div>`).join('')}</div>`;
+  const b = r.best;
+  return `<div class="pord"><div class="stk-head">📄 訂紙建議（${esc(r.vendor)}）${label || ''}</div>
+    <div>訂 <b>${b.W} 台分（${b.mm}mm）× ${b.orderM} 米</b>${b.k > 1 ? `，剖 ${b.k} 條` : ''}・約 ${b.area.toFixed(0)}㎡・做 ${r.pieces} 片、多出 ${b.extra} 片</div>
+    ${r.tips.concat(r.warn).map(t => `<div class="tip">⚠ ${esc(t)}</div>`).join('')}
+    ${r.others.length ? `<div class="alt">其他選擇：${r.others.map(o => `${o.W} 台分 × ${o.orderM} 米`).join('、')}</div>` : ''}</div>`;
+}
 function stockNeed(slot) {
   const t = boxType;
   if (slot === 'outer' ? !isOut(t) : !isIn(t)) return null;
@@ -912,15 +999,20 @@ function renderStock() {
     el.style.display = '';
     const size = `${nd.A}×${nd.B}`;
     let h = `<div class="stk-head">📦 備料建議：用紙 ${size}${nd.per > 1 ? ` ×${nd.per}張（二片接）` : ''}${nd.auto ? '（自動算）' : ''}${nd.qty ? `，共要 ${nd.need} 張${nd.per > 1 ? `（${nd.qty}×${nd.per}）` : ''}` : '（數量填了才算張數）'}${nd.split ? `<br><small style="font-weight:400;color:var(--warning)">用紙欄寫 ${esc($(SLOT[slot].mat).value)}，長＋寬超過 ${JOIN}，照二片接算</small>` : ''}</div>`;
-    if (nd.die) { el.innerHTML = h + `<div class="stk-buy">斬盒：紙直接送加工廠 → 要訂紙${nd.qty ? ` ${nd.need} 張` : ''}</div>`; return; }
+    if (nd.die) { el.innerHTML = h + `<div class="stk-buy">斬盒：紙直接送加工廠 → 要訂紙${nd.qty ? ` ${nd.need} 張` : ''}</div>` + paperOrderHTML(nd, nd.need); return; }
     const list = stockMatch(nd);
-    if (!list.length) { el.innerHTML = h + `<div class="stk-buy">庫存沒有合適的紙（${nd.layer} 層、浪費 15% 以內）→ 要訂紙${nd.qty ? ` ${nd.need} 張` : ''} ${size}</div>`; return; }
+    if (!list.length) { el.innerHTML = h + `<div class="stk-buy">庫存沒有合適的紙（${nd.layer} 層、浪費 15% 以內）→ 要訂紙${nd.qty ? ` ${nd.need} 張` : ''} ${size}</div>` + paperOrderHTML(nd, nd.need); return; }
     h += list.map(x => {
       const enough = !nd.qty || x.make >= nd.need;
       const st = !nd.qty ? '' : enough ? `<span class="stk-ok">✓ 夠用</span>` : `<span class="stk-short">不夠，還差 ${nd.need - x.make} 片，要訂紙</span>`;
       return `<div class="stk-row"><b>${esc(x.s.庫存ID)} ${esc(x.s.寬)}×${esc(x.s.長)}</b><span>${esc(x.s.位置 || '')}</span>
         <span>一張裁 ${x.pcs} 片・浪費 ${(x.waste * 100).toFixed(1)}%</span><span>約 ${esc(x.s.張數)} 張 → ${x.make} 片</span>${x.rot ? '<span class="stk-rot">要轉向</span>' : ''}${st}</div>`;
     }).join('');
+    // 庫存最好的一筆也不夠 → 照不足的片數算訂紙
+    if (nd.qty && !list.some(x => x.make >= nd.need)) {
+      const short = nd.need - list[0].make;
+      h += paperOrderHTML(nd, short, `：庫存還差 ${short} 片`);
+    }
     el.innerHTML = h;
   });
 }
