@@ -132,7 +132,7 @@ function doPost(e) {
     }
 
     if (action === 'analyzeOrder') {
-      return ok(analyzeOrder(data.fileBase64, data.mediaType));
+      return ok(analyzeOrder(data.files || [{ fileBase64: data.fileBase64, mediaType: data.mediaType }]));
     }
 
     // 老闆修正過 AI 讀錯的欄位 → 記到「辨識修正紀錄」分頁，之後用來補客戶讀單筆記
@@ -486,13 +486,23 @@ function setupNotes() {
 }
 
 // ── AI 辨識：伺服器端呼叫 Claude API，金鑰不暴露給瀏覽器 ──
-function analyzeOrder(fileBase64, mediaType) {
+function analyzeOrder(files) {
   const apiKey = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
   if (!apiKey) {
     throw new Error('尚未設定 ANTHROPIC_API_KEY，請到 Apps Script 專案設定 → Script Properties 新增');
   }
-  const mt = mediaType === 'application/pdf' ? 'application/pdf' : (mediaType || 'image/jpeg');
-  const contentType = mt === 'application/pdf' ? 'document' : 'image';
+  // 一張訂單可能有好幾頁（例如第 1 頁品項、第 2 頁麥頭），全部一起交給 AI 看
+  files = (files || []).filter(f => f && f.fileBase64);
+  if (!files.length) throw new Error('沒有收到照片');
+  const pageParts = [];
+  files.forEach((f, i) => {
+    const mt = f.mediaType === 'application/pdf' ? 'application/pdf' : (f.mediaType || 'image/jpeg');
+    if (files.length > 1) pageParts.push({ type: 'text', text: '【第 ' + (i + 1) + ' 頁，共 ' + files.length + ' 頁】' });
+    pageParts.push({ type: mt === 'application/pdf' ? 'document' : 'image', source: { type: 'base64', media_type: mt, data: f.fileBase64 } });
+  });
+  const multiNote = files.length > 1
+    ? '這次一共給你 ' + files.length + ' 頁，是「同一張訂單」的不同頁，請當成一張單一起讀（見規則 10）。\n'
+    : '';
   const year = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy');
   // 各客戶的讀單筆記（試算表「客戶讀單筆記」分頁）；讀不到也不影響辨識
   let notesBlock = '';
@@ -524,6 +534,14 @@ function analyzeOrder(fileBase64, mediaType) {
     '6. 麥頭：正嘜、側嘜照原本換行抄，每行之間用 \\n。側嘜表格裡有填數字的，要把數字填進對應的標題後面（不要放到 notes）；沒填的變數（例如 Q\'TY:、N.W.:）照樣保留標題。正嘜是圖案 LOGO 時，寫出 LOGO 上的文字。\n' +
     '7. 內盒印刷：訂單上有「內盒印刷」（表格欄位或下方區塊）就代表內盒要印刷，把內容寫進 inner_mark，例如「ITEM NO : LNL65107\\nQ\'TY : 10 PCS」（表格裡的值要填進去）。沒有內盒印刷就填空字串。\n' +
     '8. 看不清楚的欄位填空字串，不要猜。\n' +
+    '9. 整張紙板：品名寫「紙板」（例如 5層紙板 173x84）、不是做好的箱子，是整張紙板直接出貨。這種品項只填 inner_qty（訂購數量）和 inner_material（紙板尺寸，例如 173×84），inner_size 和 outer_* 全部留空，product 照抄完整品名（含品號）。\n' +
+    '10. 多頁訂單：一張單的品項、數量、日期可能在一頁，麥頭（正嘜、側嘜）在另一頁，頁數順序不一定。請這樣讀：\n' +
+    '   a. 品名、數量、尺寸、訂貨日、交貨日、單號，以「品項表格那一頁」為準。\n' +
+    '   b. 麥頭頁通常最上面會寫品號、尺寸或單號，請用它去對應到品項（例如麥頭頁寫 T1-0327 178*91*49，就是品號 T1-0327 那一筆）。把那一頁的正嘜、側嘜填進對應品項的 front_mark、side_mark。對不起來就留空，並在 notes 寫「麥頭頁對不上」，不要亂猜。\n' +
+    '   c. 麥頭頁裡的 QUANTITY、CARTON #、Q\'TY 是裝箱資訊，不是訂購數量。訂購數量只看品項頁的「訂購數量」欄。\n' +
+    '   d. 麥頭頁上的印刷要求（例如「外箱正側嘜皆印二面」）寫進 notes。麥頭頁上「內箱正嘜、內箱側嘜」若是空白，inner_mark 就留空。\n' +
+    '   e. 沒有麥頭的品項（例如整張紙板）front_mark、side_mark 留空，不要把別的品項的麥頭套上去。\n' +
+    multiNote +
     notesBlock +
     '只回傳 JSON 陣列，不要任何說明文字或 markdown：\n' +
     '[{"customer":"客戶名稱","order_no":"訂單號碼","order_date":"訂貨日期","delivery_date":"交貨日期",' +
@@ -538,10 +556,7 @@ function analyzeOrder(fileBase64, mediaType) {
     max_tokens: 12000,
     messages: [{
       role: 'user',
-      content: [
-        { type: contentType, source: { type: 'base64', media_type: mt, data: fileBase64 } },
-        { type: 'text', text: prompt }
-      ]
+      content: pageParts.concat([{ type: 'text', text: prompt }])
     }]
   };
 
