@@ -1720,7 +1720,8 @@ async function analyze(){
     recognizedItems = recognizedItems.flatMap(it => guessType(it)!=='both' ? [it] : [
       {...it, _type:'outer', product:(it.product||'')+' 外箱', inner_size:'', inner_qty:'', inner_material:'', inner_sheets:'', inner_mark:''},
       {...it, _type:'inner', product:(it.product||'')+' 內盒', outer_size:'', outer_qty:'', outer_material:'', outer_sheets:'', front_mark:'', side_mark:''}]);
-    recognizedItems.forEach(it=>{ it._orig=snapOrig(it); });   // 記下 AI 原本讀到的值，存檔時比對老闆改了哪裡
+    recognizedItems.forEach(it=>{ it._orig=snapOrig(it); });
+    await attachMarkPages(recognizedItems);   // 多頁訂單：把麥頭那一頁當麥頭照片附上去   // 記下 AI 原本讀到的值，存檔時比對老闆改了哪裡
     editingOrderId=null;
     saveBtnState();
     showRecognizedItem(0);
@@ -1728,6 +1729,39 @@ async function analyze(){
     resultCard.classList.add('show'); saveRow.style.display='flex';
   } catch(e){ showStatus('error','辨識失敗：'+e.message); }
   analyzeBtn.disabled=false;
+}
+
+// 把頁面照片縮成麥頭照片大小（跟手動拍的一樣 1600px）
+function pageToPhoto(p){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onerror=()=>res(null);
+    img.onload=()=>{
+      try{
+        const k=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight));
+        const c=document.createElement('canvas'); c.width=Math.round(img.naturalWidth*k); c.height=Math.round(img.naturalHeight*k);
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        res(c.toDataURL('image/jpeg',0.75));
+      }catch(_){ res(null); }
+    };
+    img.src=p.url;
+  });
+}
+// AI 標出每個品項的麥頭在第幾頁（mark_page）→ 自動附成這個品項的麥頭照片，存檔時一起上傳
+async function attachMarkPages(items){
+  if(pages.length<2) return;
+  const cache={};
+  for(const it of items){
+    const n=parseInt(String(it.mark_page||'').replace(/\D/g,''),10);
+    if(!n||n<1||n>pages.length||pages[n-1].type==='application/pdf') continue;
+    const t=it._type||guessType(it);
+    if(t==='divider'||t==='die') continue;
+    const slot=t==='inner'?'inner':'outer';
+    if(!cache[n]) cache[n]=await pageToPhoto(pages[n-1]);
+    if(!cache[n]) continue;
+    it._photo=it._photo||{}; it._photo[slot]=cache[n];
+    if(!it['print_'+slot]) it['print_'+slot]='是';
+  }
 }
 
 function showRecognizedItem(idx){
