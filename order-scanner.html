@@ -859,7 +859,7 @@ function candButtons(slot, list) {
 
 // ═══ 備料建議：用紙 → 找紙板庫存（只建議，不扣庫存） ═══
 // 庫存紙寫法：寬×長（長＝波浪方向）；用紙也照這個寫法比
-const STK = {waste:0.15, loss:0.03};       // 浪費 15% 以內才建議用；損耗 3%
+const STK = {waste:0.15, loss:0};          // 浪費 15% 以內才建議用；用量照箱數，不加損耗
 let stock = [];
 async function loadStock() {
   try { const r = await fetch(`${GAS_URL}?action=getStock`); const d = await r.json(); if (d.success && Array.isArray(d.data)) stock = d.data; } catch (e) {}
@@ -902,13 +902,13 @@ function renderStock() {
     if (!nd) { el.style.display = 'none'; return; }
     el.style.display = '';
     const size = `${nd.A}×${nd.B}`;
-    let h = `<div class="stk-head">📦 備料建議：用紙 ${size}${nd.per > 1 ? ` ×${nd.per}張（二片接）` : ''}${nd.auto ? '（自動算）' : ''}${nd.qty ? `，共要 ${nd.need} 張（${nd.qty}${nd.per > 1 ? `×${nd.per}` : ''}，含損耗 3%）` : '（數量填了才算張數）'}${nd.split ? `<br><small style="font-weight:400;color:var(--warning)">用紙欄寫 ${esc($(SLOT[slot].mat).value)}，長＋寬超過 ${JOIN}，照二片接算</small>` : ''}</div>`;
+    let h = `<div class="stk-head">📦 備料建議：用紙 ${size}${nd.per > 1 ? ` ×${nd.per}張（二片接）` : ''}${nd.auto ? '（自動算）' : ''}${nd.qty ? `，共要 ${nd.need} 張${nd.per > 1 ? `（${nd.qty}×${nd.per}）` : ''}` : '（數量填了才算張數）'}${nd.split ? `<br><small style="font-weight:400;color:var(--warning)">用紙欄寫 ${esc($(SLOT[slot].mat).value)}，長＋寬超過 ${JOIN}，照二片接算</small>` : ''}</div>`;
     if (nd.die) { el.innerHTML = h + `<div class="stk-buy">斬盒：紙直接送加工廠 → 要訂紙${nd.qty ? ` ${nd.need} 張` : ''}</div>`; return; }
     const list = stockMatch(nd);
     if (!list.length) { el.innerHTML = h + `<div class="stk-buy">庫存沒有合適的紙（${nd.layer} 層、浪費 15% 以內）→ 要訂紙${nd.qty ? ` ${nd.need} 張` : ''} ${size}</div>`; return; }
     h += list.map(x => {
       const enough = !nd.qty || x.make >= nd.need;
-      const st = !nd.qty ? '' : enough ? `<span class="stk-ok">✓ 夠用</span>` : `<span class="stk-short">不夠，還差 ${Math.ceil((nd.need - x.make) / x.pcs) * x.pcs} 片，要訂紙</span>`;
+      const st = !nd.qty ? '' : enough ? `<span class="stk-ok">✓ 夠用</span>` : `<span class="stk-short">不夠，還差 ${nd.need - x.make} 片，要訂紙</span>`;
       return `<div class="stk-row"><b>${esc(x.s.庫存ID)} ${esc(x.s.寬)}×${esc(x.s.長)}</b><span>${esc(x.s.位置 || '')}</span>
         <span>一張裁 ${x.pcs} 片・浪費 ${(x.waste * 100).toFixed(1)}%</span><span>約 ${esc(x.s.張數)} 張 → ${x.make} 片</span>${x.rot ? '<span class="stk-rot">要轉向</span>' : ''}${st}</div>`;
     }).join('');
