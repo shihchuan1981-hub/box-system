@@ -133,6 +133,11 @@ function doPost(e) {
       return ok(updateStation(data.orderId, data.station, data.state));
     }
 
+    // 這張訂單自己的麥頭頁照片（客戶傳來的那一頁），存到雲端硬碟，檔案ID記在這一列的 AE 欄
+    if (action === 'setOrderMarkPage') {
+      return ok(setOrderMarkPage(data.orderId, data.image));
+    }
+
     if (action === 'analyzeOrder') {
       return ok(analyzeOrder(data.files || [{ fileBase64: data.fileBase64, mediaType: data.mediaType }]));
     }
@@ -666,7 +671,7 @@ function initSheets() {
 // 訂單紀錄 P 欄以後是排程用的欄位（由 setupBoard 建立）
 
 const BOARD_COLS = ['楞別','層數','印刷','開槽','成型方式','急件','排程日期',
-                    '裁切進度','印刷進度','開槽進度','釘箱進度','出貨進度','小標張數','客戶單號','產品ID'];
+                    '裁切進度','印刷進度','開槽進度','釘箱進度','出貨進度','小標張數','客戶單號','產品ID','訂單麥頭頁'];
 const BOARD_START = 16;          // P 欄 = 第 16 欄
 const STATIONS = ['裁切','印刷','開槽','釘箱','出貨'];
 const TZ = 'Asia/Taipei';
@@ -729,18 +734,30 @@ function getBoard(date) {
   const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
   const rows = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('訂單紀錄').getDataRange().getValues();
   const out = [];
+  const prevByPid = {};   // 產品ID → 上一次訂單的麥頭文字（拿來和這次比）
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
     while (r.length < BOARD_START - 1 + BOARD_COLS.length) r.push('');
     if (!r[0]) continue;
     const b = r.slice(BOARD_START - 1);
+    const pid = String(b[14] || '');
+    const prev = pid ? prevByPid[pid] : null;
+    if (pid && (String(r[11] || '').trim() || String(r[12] || '').trim())) prevByPid[pid] = {no: String(r[0]), front: String(r[11] || ''), side: String(r[12] || '')};
     const sched = fmtDate(b[6]);
     if (!sched) continue;
     const status = String(r[14] || '');
     if (date) { if (sched !== date) continue; }
     else if (sched > today || /已出貨|已取消/.test(status) || String(b[11]).indexOf('完成') === 0) continue;
 
-    out.push(buildOrder(r, b, sched));
+    const od = buildOrder(r, b, sched);
+    od.page = String(b[15] || '');   // 這張訂單自己的麥頭頁（雲端硬碟檔案ID）
+    // 和上一次訂單的麥頭文字比：只比文字和字母，數字（重量、數量、箱號）每次不一樣所以不比
+    if (prev && String(prev.no).replace(/-\d+$/, '') !== od.no.replace(/-\d+$/, '')) {
+      const key = t => String(t || '').toUpperCase().replace(/[^A-Z\u4e00-\u9fff]/g, '');
+      od.prevFront = prev.front; od.prevSide = prev.side;
+      od.markChanged = key(prev.front + prev.side) !== key(od.front + od.side);
+    }
+    out.push(od);
   }
   return out;
 }
@@ -835,6 +852,28 @@ function writeOrderNo(sheet, rowNo, orderNo) {
   const col = BOARD_START + 13;
   if (!sheet.getRange(1, col).getValue()) sheet.getRange(1, col).setValue('客戶單號').setFontWeight('bold');
   sheet.getRange(rowNo, col).setValue(String(orderNo || ''));
+}
+
+// 這張訂單自己的麥頭頁（AE 欄記雲端硬碟檔案ID），工站看板印刷站拿來和印好的照片對照
+function setOrderMarkPage(orderId, image) {
+  const m = String(image || '').match(/^data:(image\/\w+);base64,(.+)$/);
+  if (!m) throw new Error('照片格式不對');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('訂單紀錄');
+    const ids = sh.getRange(1, 1, sh.getLastRow(), 1).getValues();
+    let rowNo = -1;
+    for (let i = 1; i < ids.length; i++) if (String(ids[i][0]) === String(orderId)) { rowNo = i + 1; break; }
+    if (rowNo < 0) throw new Error('找不到訂單：' + orderId);
+    const file = photoFolder().createFile(Utilities.newBlob(Utilities.base64Decode(m[2]), m[1], '訂單麥頭頁_' + orderId + '.jpg'));
+    const col = BOARD_START + 15;
+    if (!sh.getRange(1, col).getValue()) sh.getRange(1, col).setValue('訂單麥頭頁').setFontWeight('bold');
+    sh.getRange(rowNo, col).setValue(file.getId());
+    return {id: file.getId()};
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // 這一列對到的產品ID（AD 欄）

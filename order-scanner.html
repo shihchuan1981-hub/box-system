@@ -1123,6 +1123,8 @@ function renderMk() {
     if (pend && it && it._saved && p) h += `<img class="mk-thumb" src="${pend}" alt="麥頭照片" onclick="showPending('${slot}')"><span class="pr-why" style="color:var(--accent)">訂單已存，照片還沒傳上去</span><button type="button" class="pm-btn go" onclick="retryPhoto('${slot}', this)">重試上傳</button>`;
     else if (pend) h += `<img class="mk-thumb" src="${pend}" alt="麥頭照片" onclick="showPending('${slot}')"><span class="pr-why">✓ 已附，按儲存時一起上傳</span><button type="button" class="pm-btn" onclick="dropPhoto('${slot}')">移除</button>`;
     else if (last) h += photoImg(last.id) + `<span class="pr-why">上次麥頭 ${esc(last.date)}</span>`;
+    const pg = it && it._page && it._page[slot];
+    if (pg) h += `<div style="flex-basis:100%"></div><img class="mk-thumb" src="${pg}" alt="訂單麥頭頁" onclick="showPageImg('${slot}')"><span class="pr-why">這次訂單的麥頭頁（存檔時一起存，印刷站會拿來對照）${last || pend ? '' : '。這個產品還沒有印好的照片，印刷站會先用這張'}</span>`;
     h += `<label class="cam-btn">${pend ? '重拍 ' : '📷 附印好的麥頭 '}<input type="file" accept="image/*" capture="environment" onchange="attachPhoto('${slot}', this)"></label>`;
     el.innerHTML = h;
   });
@@ -1141,6 +1143,20 @@ function showPending(slot) {
   const src = pendingOf(curItem(), slot); if (!src) return;
   const o = document.createElement('div'); o.className = 'ph-over'; o.onclick = () => o.remove();
   o.innerHTML = `<img src="${src}" alt="麥頭照片"><span>點一下關閉</span>`; document.body.appendChild(o);
+}
+function showPageImg(slot) {
+  const it = curItem(), src = it && it._page && it._page[slot]; if (!src) return;
+  const o = document.createElement('div'); o.className = 'ph-over'; o.onclick = () => o.remove();
+  o.innerHTML = `<img src="${src}" alt="訂單麥頭頁"><span>點一下關閉</span>`; document.body.appendChild(o);
+}
+// 存檔後，把這張訂單的麥頭頁存到對應那一列（失敗不影響訂單，只是印刷站少一張對照圖）
+async function sendMarkPages(d, rows) {
+  const it = d._item; if (!it || !it._page) return;
+  for (const row of rows) {
+    const slot = (row.outerSize || row.outerQty || row.outerMaterial) ? 'outer' : 'inner';
+    const img = it._page[slot]; if (!img) continue;
+    try { await gasPost({action:'setOrderMarkPage', orderId:row.orderId, image:img}); } catch (e) {}
+  }
 }
 // 有附照片、但這筆還沒對到產品 → 用這筆的資料建一個新產品（照片要掛在產品上）
 async function ensureProducts(d) {
@@ -1747,7 +1763,7 @@ function pageToPhoto(p){
     img.src=p.url;
   });
 }
-// AI 標出每個品項的麥頭在第幾頁（mark_page）→ 自動附成這個品項的麥頭照片，存檔時一起上傳
+// AI 標出每個品項的麥頭在第幾頁（mark_page）→ 記成這張訂單的麥頭頁；存檔時另存，印刷站拿來和印好的照片對照
 async function attachMarkPages(items){
   if(pages.length<2) return;
   const cache={};
@@ -1759,7 +1775,7 @@ async function attachMarkPages(items){
     const slot=t==='inner'?'inner':'outer';
     if(!cache[n]) cache[n]=await pageToPhoto(pages[n-1]);
     if(!cache[n]) continue;
-    it._photo=it._photo||{}; it._photo[slot]=cache[n];
+    it._page=it._page||{}; it._page[slot]=cache[n];   // 這張訂單自己的麥頭頁：存檔時另存，不當產品的「印好的麥頭照片」
     if(!it['print_'+slot]) it['print_'+slot]='是';
   }
 }
@@ -2028,7 +2044,9 @@ $('saveBtn').addEventListener('click', async()=>{
     if(!isEdit) await ensureProducts(d);
     noteProducts(d._pm);
     const fix = isEdit ? [] : collectCorrections(d, d._item);
-    await postRows(buildRows(d, 'O'+Date.now()));
+    const rowsToSave = buildRows(d, 'O'+Date.now());
+    await postRows(rowsToSave);
+    if(!isEdit) await sendMarkPages(d, rowsToSave);
     sendCorrections(d, d._item, fix);
     if(!isEdit && d._item) lastSave.items.push(d._item);
     markRecent(d.customer); if(!isEdit) markProductsUsed(d._pm); rememberPrint(d._item, d._pm);
@@ -2073,7 +2091,9 @@ async function saveAll(){
       await ensureProducts(d);
       noteProducts(d._pm);
       const fix = collectCorrections(d, d._item);
-      await postRows(buildRows(d, 'O'+ts+'-'+(i+1)));
+      const rowsToSave = buildRows(d, 'O'+ts+'-'+(i+1));
+      await postRows(rowsToSave);
+      await sendMarkPages(d, rowsToSave);
       sendCorrections(d, d._item, fix);
       lastSave.items.push(recognizedItems[i]);
       markProductsUsed(d._pm); rememberPrint(d._item, d._pm);
