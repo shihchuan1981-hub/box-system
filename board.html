@@ -67,6 +67,21 @@ h2{font-size:30px;margin:0;font-weight:900}
 .acts .go-done{background:var(--ok);border-color:var(--ok);color:#fff}
 .acts button:disabled{opacity:.4;cursor:wait}
 .acts .undo{grid-column:1/-1;font-size:14px;padding:8px;border-color:var(--line);color:var(--ink-2)}
+/* 裁切站：要不要印刷 */
+.ptag{font-size:20px;font-weight:900;text-align:center;padding:8px;border-radius:6px}
+.ptag.yes{background:var(--accent);color:#fff}
+.ptag.no{background:var(--chip);color:var(--ink-2)}
+/* 印刷站：麥頭文字和照片 */
+.mk{display:flex;flex-direction:column;gap:8px;border-top:2px dashed var(--line);padding-top:8px}
+.mksec .lbl{display:block;margin-bottom:2px}
+.mksec pre{margin:0;font-family:var(--sans);font-size:20px;font-weight:700;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--warn-soft);border-radius:4px;padding:8px 10px}
+.mksec.empty{font-size:14px;color:var(--ink-2)}
+.mkphoto img{width:100%;max-height:260px;object-fit:contain;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:zoom-in}
+.mkphoto small{display:block;font-size:12px;color:var(--ink-2);margin-top:2px}
+.mkwarn{font-size:15px;font-weight:700;color:var(--accent);background:#fdf0ef;border:1px solid #ef9a9a;border-radius:4px;padding:8px 10px}
+.ph-over{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:8px}
+.ph-over img{max-width:100%;max-height:92vh;object-fit:contain}
+.ph-over span{color:#fff;font-size:14px}
 button:focus-visible{outline:3px solid var(--warn);outline-offset:2px}
 .empty{text-align:center;padding:40px;color:var(--ink-2);background:var(--surface);border-radius:8px;border:1px dashed var(--line)}
 .overview{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow-x:auto}
@@ -153,6 +168,57 @@ let cur = (() => {
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const stateOf = (o, s) => o.prog[s] || 'todo';
 function readyFor(o, s) { const i = o.route.indexOf(s); return i === 0 || (i > 0 && stateOf(o, o.route[i-1]) === 'done'); }
+// ── 印刷站：產品最新的麥頭照片（讀一次就記住，不會每分鐘重讀）──
+const pidPhotos = {};   // 產品ID → {id,date} 或 null（沒照片）
+const photoData = {};   // 檔案ID → 圖片資料；'' = 讀失敗
+let photoBusy = false;
+function firstPhoto(s) {
+  const x = String(s || '').split('｜').filter(Boolean)[0]; if (!x) return null;
+  const i = x.indexOf('@'); return i < 0 ? {id:x, date:''} : {id:x.slice(0, i), date:x.slice(i + 1)};
+}
+async function loadPhotos() {
+  if (cur !== 1 || photoBusy) return;
+  const list = shown().filter(o => o.route.includes(1) && stateOf(o, 1) !== 'done');
+  const need = [...new Set(list.map(o => o.pid).filter(p => p && pidPhotos[p] === undefined))];
+  photoBusy = true;
+  try {
+    if (need.length) {
+      const d = await (await fetch(GAS_URL + '?action=getProductPhotos&ids=' + encodeURIComponent(need.join(',')))).json();
+      if (d.success) { need.forEach(p => { pidPhotos[p] = firstPhoto(d.data[p]); }); render(); }
+    }
+    const ids = [...new Set(list.map(o => pidPhotos[o.pid]).filter(Boolean).map(x => x.id).filter(id => photoData[id] === undefined))];
+    for (const id of ids) {
+      try {
+        const d = await (await fetch(GAS_URL + '?action=getPhoto&id=' + encodeURIComponent(id))).json();
+        photoData[id] = d.success ? d.data : '';
+      } catch (e) { photoData[id] = ''; }
+      render();
+    }
+  } catch (e) {}
+  photoBusy = false;
+}
+function showPhoto(id) {
+  const u = photoData[id]; if (!u) return;
+  const o = document.createElement('div');
+  o.className = 'ph-over'; o.onclick = () => o.remove();
+  o.innerHTML = `<img src="${u}" alt="麥頭照片"><span>點一下關閉</span>`;
+  document.body.appendChild(o);
+}
+function mkSec(label, text) {
+  return String(text || '').trim()
+    ? `<div class="mksec"><span class="lbl">${label}</span><pre>${esc(text)}</pre></div>`
+    : `<div class="mksec empty"><span class="lbl">${label}</span>（沒填）</div>`;
+}
+function photoHTML(o) {
+  if (!o.pid) return '<div class="mkwarn">⚠ 沒有麥頭照片（這張單存檔時沒記到產品，重新存一次就會有）</div>';
+  const ph = pidPhotos[o.pid];
+  if (ph === undefined) return '<div class="mksec empty">麥頭照片載入中…</div>';
+  if (!ph) return '<div class="mkwarn">⚠ 沒有麥頭照片，請找老闆確認</div>';
+  const u = photoData[ph.id];
+  if (u === undefined) return '<div class="mksec empty">麥頭照片載入中…</div>';
+  if (!u) return '<div class="mkwarn">⚠ 麥頭照片讀不到，請按「重新整理」再試</div>';
+  return `<div class="mkphoto"><img src="${u}" alt="麥頭照片" onclick="showPhoto('${esc(ph.id)}')"><small>麥頭照片${ph.date ? '（' + esc(ph.date) + '拍）' : ''}・點照片放大</small></div>`;
+}
 const byPriority = (a, b) => (b.rush - a.rush) || String(a.dueKey).localeCompare(String(b.dueKey));
 
 async function load() {
@@ -210,10 +276,13 @@ function render() {
         ${o.material ? `<span class="mat ${cur === 0 ? 'big' : ''}"><span class="lbl">用料</span>${esc(o.material)}</span>` : ''}</div>
       <div class="specs"><span class="size"><span class="lbl">尺寸</span>${esc(o.size)}</span><span class="qty">${esc(o.qty)}</span></div>
       <div class="due">交貨 <b>${esc(o.due) || '－'}</b></div>
+      ${cur === 0 ? `<div class="ptag ${o.print ? 'yes' : 'no'}">${o.print ? '要印刷' : '不印刷'}</div>` : ''}
+      ${cur === 1 ? `<div class="mk">${o.type === '內盒' ? mkSec('內盒印刷', o.front) : mkSec('正嘜', o.front) + mkSec('側嘜', o.side)}${photoHTML(o)}</div>` : ''}
       ${glue}${o.note ? `<div class="note">${esc(o.note)}</div>` : ''}
       <div class="acts">${acts}</div>
     </div>`;
   }).join('');
+  if (cur === 1) loadPhotos();
 }
 
 function renderOverview() {

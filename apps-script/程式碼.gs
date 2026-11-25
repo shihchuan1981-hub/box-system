@@ -51,6 +51,8 @@ function doPost(e) {
       }
       writeSchedule(sheet, rowNo, data.schedDate, data.rush);
       if (data.orderNo !== undefined) writeOrderNo(sheet, rowNo, data.orderNo);
+      // 記下這一列對到的產品ID（AD 欄），工站看板用它去找這個產品最新的麥頭照片
+      if (data.productId) writeProductId(sheet, rowNo, data.productId);
       // 對到產品時，把層數、印刷帶進看板欄位（Q、R 欄）
       if (data.layer) sheet.getRange(rowNo, BOARD_START + 1).setValue(String(data.layer));
       if (data.print) sheet.getRange(rowNo, BOARD_START + 2).setValue(data.print);
@@ -610,6 +612,10 @@ function doGet(e) {
     try { return ok(getPhoto(e.parameter.id)); }
     catch (err) { return ContentService.createTextOutput(JSON.stringify({success:false, error:err.message})).setMimeType(ContentService.MimeType.JSON); }
   }
+  if (action === 'getProductPhotos') {
+    try { return ok(getProductPhotos(e.parameter.ids)); }
+    catch (err) { return ContentService.createTextOutput(JSON.stringify({success:false, error:err.message})).setMimeType(ContentService.MimeType.JSON); }
+  }
   if (action === 'getStock') {
     try { return ok(getStock()); }
     catch (err) { return ContentService.createTextOutput(JSON.stringify({success:false, error:err.message})).setMimeType(ContentService.MimeType.JSON); }
@@ -660,7 +666,7 @@ function initSheets() {
 // 訂單紀錄 P 欄以後是排程用的欄位（由 setupBoard 建立）
 
 const BOARD_COLS = ['楞別','層數','印刷','開槽','成型方式','急件','排程日期',
-                    '裁切進度','印刷進度','開槽進度','釘箱進度','出貨進度','小標張數','客戶單號'];
+                    '裁切進度','印刷進度','開槽進度','釘箱進度','出貨進度','小標張數','客戶單號','產品ID'];
 const BOARD_START = 16;          // P 欄 = 第 16 欄
 const STATIONS = ['裁切','印刷','開槽','釘箱','出貨'];
 const TZ = 'Asia/Taipei';
@@ -770,7 +776,11 @@ function buildOrder(r, b, sched) {
       material: String(r[isInner ? 8 : 5] || '') || calcMaterial(size, layer, kind),
       rush: isYes(b[5]), sched: sched, note: String(r[13] || ''),
       route: route, prog: prog, copies: Number(b[12]) || 1,
-      orderNo: String(b[13] || ''), type: isInner ? '內盒' : '外箱'
+      orderNo: String(b[13] || ''), type: isInner ? '內盒' : '外箱',
+      // 印刷站用：要不要印、麥頭文字、對到的產品ID（照片另外用 getProductPhotos 讀）
+      print: print,
+      front: String(r[11] || ''), side: isInner ? '' : String(r[12] || ''),
+      pid: String(b[14] || '')
     };
 }
 
@@ -825,6 +835,32 @@ function writeOrderNo(sheet, rowNo, orderNo) {
   const col = BOARD_START + 13;
   if (!sheet.getRange(1, col).getValue()) sheet.getRange(1, col).setValue('客戶單號').setFontWeight('bold');
   sheet.getRange(rowNo, col).setValue(String(orderNo || ''));
+}
+
+// 這一列對到的產品ID（AD 欄）
+function writeProductId(sheet, rowNo, pid) {
+  const col = BOARD_START + 14;
+  if (!sheet.getRange(1, col).getValue()) sheet.getRange(1, col).setValue('產品ID').setFontWeight('bold');
+  sheet.getRange(rowNo, col).setValue(String(pid || ''));
+}
+
+// 工站看板印刷站：一次問好幾個產品ID，回傳每個產品的照片欄（「檔案ID@日期｜…」，最新的在前面）
+// 只讀產品ID那一欄，再讀要用的那幾格，不會把三萬多筆產品整份讀出來
+function getProductPhotos(idsText) {
+  const ids = String(idsText || '').split(',').map(x => x.trim()).filter(Boolean).slice(0, 60);
+  const out = {};
+  if (!ids.length) return out;
+  const sh = prodSheet();
+  const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  const pc = h.indexOf('照片') + 1;
+  if (pc < 1) return out;
+  const col = sh.getRange(1, 1, sh.getLastRow(), 1).getValues();
+  const rowOf = {};
+  for (let i = 1; i < col.length; i++) rowOf[String(col[i][0])] = i + 1;
+  ids.forEach(id => {
+    out[id] = rowOf[id] ? String(sh.getRange(rowOf[id], pc).getValue() || '') : '';
+  });
+  return out;
 }
 
 // ── 平板按「開始／完成」 ──
