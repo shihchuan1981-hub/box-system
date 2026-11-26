@@ -272,6 +272,19 @@ function getPaperPrice() {
   }
   return out;
 }
+// ═══ 材質對照（只讀）═══
+// 分頁「材質對照」：A 紙廠｜B 產品資料的材質（永發庫存紙編號）｜C 紙廠的材質（和紙價表一樣）｜D 備註
+// 訂紙算價時，先把產品的材質換成紙廠的材質，再去紙價表找單價；沒寫對照的就直接用原本的材質
+function getPaperMap() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('材質對照');
+  if (!sh) return [];
+  const v = sh.getDataRange().getValues(), out = [];
+  for (let i = 1; i < v.length; i++) {
+    if (!v[i][0] || !v[i][1] || !v[i][2]) continue;
+    out.push({廠商: cellText(v[i][0]), 產品材質: cellText(v[i][1]), 紙廠材質: cellText(v[i][2])});
+  }
+  return out;
+}
 // 第一次使用：執行一次 setupPaperPrice，會建立「紙價表」分頁（已存在就不動）
 function setupPaperPrice() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -654,6 +667,10 @@ function doGet(e) {
   }
   if (action === 'getPaperPrice') {
     try { return ok(getPaperPrice()); }
+    catch (err) { return ContentService.createTextOutput(JSON.stringify({success:false, error:err.message})).setMimeType(ContentService.MimeType.JSON); }
+  }
+  if (action === 'getPaperMap') {
+    try { return ok(getPaperMap()); }
     catch (err) { return ContentService.createTextOutput(JSON.stringify({success:false, error:err.message})).setMimeType(ContentService.MimeType.JSON); }
   }
   if (action === 'getProducts') {

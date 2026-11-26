@@ -903,15 +903,18 @@ const PAPER_VENDORS = {
 };
 
 // 紙價表（來自試算表「紙價表」分頁：廠商｜材質｜起算米數｜單價(元/㎡)）
-let paperPrice = [];
+let paperPrice = [], paperMap = [];   // paperMap：試算表「材質對照」，產品材質（永發庫存紙編號）→ 紙廠的材質
 async function loadPaperPrice() {
   try { const r = await fetch(`${GAS_URL}?action=getPaperPrice`); const d = await r.json(); if (d.success && Array.isArray(d.data)) paperPrice = d.data; } catch (e) {}
+  try { const r = await fetch(`${GAS_URL}?action=getPaperMap`); const d = await r.json(); if (d.success && Array.isArray(d.data)) paperMap = d.data; } catch (e) {}
   if (typeof renderStock === 'function') renderStock();
 }
 // 找這個廠商＋材質的單價級距：[{m:起算米數, p:元/㎡}]，沒填就是空的
 function paperTiers(vendorName, mat) {
   const nm = s => String(s || '').trim().toLowerCase().replace(/\s+/g, '');
   const rows = paperPrice.filter(r => nm(r.廠商) === nm(vendorName) && +r.單價 > 0);
+  const mp = mat && paperMap.find(r => nm(r.廠商) === nm(vendorName) && nm(r.產品材質) === nm(mat));
+  if (mp) mat = mp.紙廠材質;   // 先把永發的材質換成這家紙廠的材質
   let pick = rows.filter(r => mat && nm(r.材質) === nm(mat));
   if (!pick.length) pick = rows.filter(r => ['*', '全部', '通用', ''].includes(nm(r.材質)));
   return pick.map(r => ({m: +r.起算米數 || 0, p: +r.單價})).sort((a, b) => a.m - b.m);
