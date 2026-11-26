@@ -258,6 +258,32 @@ function getStock() {
   return out;
 }
 
+// ═══ 紙價表（只讀，給接單頁的「訂紙建議」算預估紙價）═══
+// 分頁「紙價表」：A 廠商｜B 材質｜C 起算米數｜D 單價（元/㎡）｜E 備註
+// 同一個廠商＋材質，可以寫多列：起算米數 0＝一般價，100＝訂 100 米以上的價。單價空白的列不會用。
+// 材質欄空白（或寫「全部」）＝這個廠商所有材質通用的價
+function getPaperPrice() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('紙價表');
+  if (!sh) return [];
+  const v = sh.getDataRange().getValues(), out = [];
+  for (let i = 1; i < v.length; i++) {
+    if (!v[i][0] || !(Number(v[i][3]) > 0)) continue;
+    out.push({廠商: cellText(v[i][0]), 材質: cellText(v[i][1]), 起算米數: Number(v[i][2]) || 0, 單價: Number(v[i][3])});
+  }
+  return out;
+}
+// 第一次使用：執行一次 setupPaperPrice，會建立「紙價表」分頁（已存在就不動）
+function setupPaperPrice() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss.getSheetByName('紙價表')) return;
+  const sh = ss.insertSheet('紙價表');
+  sh.getRange(1, 1, 1, 5).setValues([['廠商', '材質', '起算米數', '單價(元/㎡)', '備註']]).setFontWeight('bold').setBackground('#fdf6e8');
+  sh.getRange(2, 1, 2, 5).setValues([
+    ['華豐', '（填材質，例如 5++s3）', 0, '', '一般價（訂未滿 100 米）'],
+    ['華豐', '（填材質，例如 5++s3）', 100, '', '訂 100 米以上的價']]);
+  sh.setColumnWidth(2, 180); sh.setColumnWidth(5, 220); sh.setFrozenRows(1);
+}
+
 // 新產品：自動給下一個產品ID，存在最後一列
 function saveProduct(p) {
   const lock = LockService.getScriptLock();
@@ -623,6 +649,10 @@ function doGet(e) {
   }
   if (action === 'getStock') {
     try { return ok(getStock()); }
+    catch (err) { return ContentService.createTextOutput(JSON.stringify({success:false, error:err.message})).setMimeType(ContentService.MimeType.JSON); }
+  }
+  if (action === 'getPaperPrice') {
+    try { return ok(getPaperPrice()); }
     catch (err) { return ContentService.createTextOutput(JSON.stringify({success:false, error:err.message})).setMimeType(ContentService.MimeType.JSON); }
   }
   if (action === 'getProducts') {
