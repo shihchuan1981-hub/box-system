@@ -896,7 +896,9 @@ const PAPER_VENDORS = {
     minCut: 190, maxCut: 1254,   // 紙長（裁切長度）範圍
     smallArea: 100, smallFee: 1, // 單筆未滿 100㎡，每㎡加 1 元
     trim: 6,                // 修邊：整條紙寬要留 6 台分
-    maxLanes: 2             // 華豐最多剖 2 條；其他廠商不設限就不要寫
+    maxLanes: 2,            // 華豐最多剖 2 條；其他廠商不設限就不要寫
+    creaseFromQty: 100,     // 紙箱數量超過 100 個，請紙廠直接壓線（我們少一道工序）
+    creaseMin: {}           // 壓線的最少米數：{紙寬台分: 米數}；沒寫的紙寬＝和一般最少米數一樣（華豐目前每個寬度都一樣）
   }
 };
 
@@ -916,7 +918,7 @@ function paperTiers(vendorName, mat) {
 }
 
 // A＝我們要的紙寬（台分），B＝紙長（台分），qty＝箱數，per＝一個箱要幾張（二片接＝2），tiers＝單價級距
-function calcPaperOrder({A, B, qty, per = 1, vendor = 'huafeng', tiers = []}) {
+function calcPaperOrder({A, B, qty, per = 1, vendor = 'huafeng', tiers = [], crease = false}) {
   const V = PAPER_VENDORS[vendor], tips = [], warn = [];
   const pieces = Math.ceil(qty * per);
   if (!(A > 0 && B > 0 && pieces > 0)) return {ok:false, warn:['尺寸或數量不完整，無法算訂紙']};
@@ -943,7 +945,8 @@ function calcPaperOrder({A, B, qty, per = 1, vendor = 'huafeng', tiers = []}) {
       special: tag === 'special', split: W >= V.mustSplitFrom, bump: !!bump};
   };
   const cands = [], baseOf = {};
-  V.widths.forEach(([W, minM, tag]) => {
+  V.widths.forEach(([W, minM0, tag]) => {
+    const minM = crease && V.creaseMin && V.creaseMin[W] != null ? V.creaseMin[W] : minM0;   // 壓線有自己的最少米數
     let k = Math.floor((W - V.trim) / lane);        // 能剖幾條
     if (V.maxLanes) k = Math.min(k, V.maxLanes);
     if (k < 1) return;
@@ -978,14 +981,15 @@ function calcPaperOrder({A, B, qty, per = 1, vendor = 'huafeng', tiers = []}) {
   else if (c.k > 1) tips.push(`剖 ${c.k} 條，每條 ${c.lane}，剩 ${c.trim} 台分（含修邊 ${V.trim}）`);
   const seen = new Set([c.W + '|' + c.orderM]), others = [];
   cands.slice(1).forEach(x => { const key = x.W + '|' + x.orderM; if (!seen.has(key) && others.length < 2) { seen.add(key); others.push(x); } });
-  return {ok:true, vendor:V.name, pieces, cut, mult, priced, best:c, others, tips, warn};
+  return {ok:true, vendor:V.name, pieces, cut, mult, priced, crease, best:c, others, tips, warn};
 }
 
 // 訂紙建議的畫面
 function paperOrderHTML(nd, pieces, label) {
   if (!pieces) return '';
   const tiers = paperTiers(PAPER_VENDORS.huafeng.name, nd.mat);
-  const r = calcPaperOrder({A: nd.A, B: nd.B, qty: pieces, per: 1, tiers});
+  const V = PAPER_VENDORS.huafeng, crease = nd.qty > V.creaseFromQty;   // 數量超過 100 個 → 請紙廠壓線
+  const r = calcPaperOrder({A: nd.A, B: nd.B, qty: pieces, per: 1, tiers, crease});
   if (!r.ok) return `<div class="pord"><div class="stk-head">📄 訂紙建議${label || ''}</div>${r.warn.map(w => `<div class="tip">⚠ ${esc(w)}</div>`).join('')}</div>`;
   const b = r.best;
   const money = r.priced
@@ -994,6 +998,7 @@ function paperOrderHTML(nd, pieces, label) {
   return `<div class="pord"><div class="stk-head">📄 訂紙建議（${esc(r.vendor)}）${label || ''}</div>
     <div>訂 <b>${b.W} 台分（${b.mm}mm）× ${b.orderM} 米</b>（長 ${Math.round(b.orderM / TAIFEN_M).toLocaleString()} 台分）${b.k > 1 ? `，剖 ${b.k} 條` : ''}・約 ${b.area.toFixed(0)}㎡・做 ${r.pieces} 片、多出 ${b.extra} 片・損耗 ${(Math.max(b.waste, 0) * 100).toFixed(1)}%</div>
     ${money}
+    <div>${crease ? `✂ <b>請紙廠直接壓線</b>（數量 ${nd.qty} 個，超過 ${V.creaseFromQty} 個）：壓好線的紙板，我們少一道工序` : `數量 ${nd.qty} 個，不超過 ${V.creaseFromQty} 個，不用請紙廠壓線`}</div>
     ${r.tips.concat(r.warn).map(t => `<div class="tip">⚠ ${esc(t)}</div>`).join('')}
     ${r.others.length ? `<div class="alt">其他選擇：${r.others.map(o => `${o.W} 台分 × ${o.orderM} 米${o.cost != null ? `（NT$${o.cost.toLocaleString()}）` : ''}`).join('、')}</div>` : ''}</div>`;
 }
