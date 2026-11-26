@@ -58,6 +58,9 @@ function doPost(e) {
       if (data.print) sheet.getRange(rowNo, BOARD_START + 2).setValue(data.print);
       // 斬盒→「斬盒」或「斬盒釘箱」、隔板→「平板紙板」（T 欄成型方式，不經釘箱站）；空字串＝改回一般箱
       if (data.form !== undefined && data.form !== null) sheet.getRange(rowNo, BOARD_START + 4).setValue(data.form);
+      // 斬盒／套板：印刷時機（AG 欄：先印、後印）、備紙（AH 欄：訂紙、庫存裁切）
+      if (data.dieTiming !== undefined) writeBoardCell(sheet, rowNo, COL_TIMING, data.dieTiming);
+      if (data.paperSource !== undefined) writeBoardCell(sheet, rowNo, COL_SOURCE, data.paperSource);
       if (data.productId && rowIndex < 0) { try { touchProduct(data.productId); } catch (e) {} }
       return ok(rowIndex >= 0 ? '訂單已更新' : '訂單已儲存');
     }
@@ -76,6 +79,14 @@ function doPost(e) {
 
     if (action === 'setProductPrint') {
       return ok(setProductPrint(data.productId, data.print));
+    }
+
+    if (action === 'setProductPrintTime') {
+      return ok(setProductPrintTime(data.productId, data.timing));
+    }
+
+    if (action === 'setDieOption') {
+      return ok(setDieOption(data.orderId, data.timing, data.source));
     }
 
     if (action === 'addAlias') {
@@ -347,6 +358,29 @@ function setProductPrint(id, v) {
   return '已更新';
 }
 
+// 斬盒／套板的印刷順序記在產品資料（沒有「印刷時機」欄就加在最後面）
+function setProductPrintTime(id, v) {
+  if (['先印', '後印'].indexOf(v) < 0) throw new Error('印刷時機只能是 先印 或 後印');
+  const sh = prodSheet();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+    const rowNo = findProductRow(sh, id);
+    if (rowNo < 0) return '找不到產品';
+    let col = h.indexOf('印刷時機') + 1;
+    if (!col) {
+      col = h.length + 1;
+      if (sh.getMaxColumns() < col) sh.insertColumnsAfter(sh.getMaxColumns(), col - sh.getMaxColumns());
+      sh.getRange(1, col).setValue('印刷時機').setFontWeight('bold');
+    }
+    sh.getRange(rowNo, col).setValue(v);
+    return '已更新';
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // 下單後更新最後出貨日、出貨次數（常做的產品才會排前面）
 function touchProduct(id) {
   const sh = prodSheet();
@@ -593,6 +627,7 @@ function analyzeOrder(files) {
     '   c. 圖案放在它原本的位置（在上面就寫在最前面一行，在文字中間就寫在中間）。\n' +
     '12. mark_page：這個品項的麥頭在第幾頁（只有多頁訂單才填，填阿拉伯數字，例如 2）；只有一頁、或這個品項沒有麥頭就填空字串。\n' +
     '13. 手寫品項：印刷的表格或貼紙樣張（例如有 ITEM NO、Q\'TY、N.W.、MEAS 的那一塊）下面或旁邊，如果有手寫的幾行字，每一行手寫的都是「一個品項」，要各輸出一個物件，不要漏、不要只讀印刷的那一塊。手寫一行的內容：三個數字（例如 30×20×7）是尺寸；「=」後面的兩個數字是用紙；「N盒」「N箱」「N個」或單獨寫在行尾的數字（例如 500）是訂購數量。印刷的那一塊（貼紙樣張）是這幾筆共用的麥頭，填進每一筆的 side_mark。手寫看不清楚的欄位留空，並在 notes 寫「手寫品項，請確認」。\n' +
+    '14. die_type：這個品項的文字寫「斬型」「斬盒」就填「斬盒」，寫「套板」就填「套板」（即使同一行也寫「內盒」也一樣）；其他填空字串。其他欄位照原本規則填。\n' +
     multiNote +
     notesBlock +
     '只回傳 JSON 陣列，不要任何說明文字或 markdown：\n' +
@@ -600,7 +635,7 @@ function analyzeOrder(files) {
     '"product":"品名","item_no":"Item No.","barcode":"條碼",' +
     '"outer_size":"外箱 長×寬×高","outer_qty":"外箱數量","outer_material":"外箱用紙 A×B","outer_sheets":"外箱每箱幾張",' +
     '"inner_size":"內盒 長×寬×高","inner_qty":"內盒數量","inner_material":"內盒用紙 A×B","inner_sheets":"內盒每個幾張",' +
-    '"front_mark":"正嘜","side_mark":"側嘜","inner_mark":"內盒印刷內容","notes":"印刷要求與特殊備注","mark_page":"麥頭在第幾頁"}]\n' +
+    '"front_mark":"正嘜","side_mark":"側嘜","inner_mark":"內盒印刷內容","notes":"印刷要求與特殊備注","mark_page":"麥頭在第幾頁","die_type":"斬盒、套板或空字串"}]\n' +
     '客戶名稱、訂單號碼、日期等共用資訊請在每個品項裡都填上相同的值。';
 
   const payload = {
@@ -719,9 +754,21 @@ function initSheets() {
 // 訂單紀錄 P 欄以後是排程用的欄位（由 setupBoard 建立）
 
 const BOARD_COLS = ['楞別','層數','印刷','開槽','成型方式','急件','排程日期',
-                    '裁切進度','印刷進度','開槽進度','釘箱進度','出貨進度','小標張數','客戶單號','產品ID','訂單麥頭頁'];
+                    '裁切進度','印刷進度','開槽進度','釘箱進度','出貨進度','小標張數','客戶單號','產品ID','訂單麥頭頁',
+                    '外加工進度','印刷時機','備紙'];
 const BOARD_START = 16;          // P 欄 = 第 16 欄
-const STATIONS = ['裁切','印刷','開槽','釘箱','出貨'];
+const STATIONS = ['裁切','印刷','開槽','釘箱','出貨','外加工'];   // 外加工是後來加的，編號排最後，畫面上排在印刷和開槽之間
+const COL_OUT = 16, COL_TIMING = 17, COL_SOURCE = 18;            // 在 BOARD_COLS 裡的位置
+// 第 k 站的進度寫在哪一欄
+function progIndex(k) { return k === 5 ? COL_OUT : 7 + k; }
+// 回傳看板欄位的欄號；試算表欄數不夠、或還沒有標題就補上
+function boardCol(sheet, idx) {
+  const col = BOARD_START + idx;
+  if (sheet.getMaxColumns() < col) sheet.insertColumnsAfter(sheet.getMaxColumns(), col - sheet.getMaxColumns());
+  if (!sheet.getRange(1, col).getValue()) sheet.getRange(1, col).setValue(BOARD_COLS[idx]).setFontWeight('bold');
+  return col;
+}
+function writeBoardCell(sheet, rowNo, idx, v) { sheet.getRange(rowNo, boardCol(sheet, idx)).setValue(String(v || '')); }
 const TZ = 'Asia/Taipei';
 
 // ── 第一次使用：執行一次 setupBoard ──
@@ -735,7 +782,7 @@ function setupBoard() {
   dd(1, ['5','3']);
   dd(2, ['是','否']);
   dd(3, ['是','否']);
-  dd(4, ['釘箱','糊箱','平板紙板','斬盒','斬盒釘箱']);
+  dd(4, ['釘箱','糊箱','平板紙板','斬盒','斬盒釘箱','套板','套板釘箱']);
   dd(5, ['是','否']);
   sh.getRange(2, BOARD_START + 6, last - 1, 1)
     .setDataValidation(SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(true).build())
@@ -816,7 +863,8 @@ function buildOrder(r, b, sched) {
     const size = String(r[4] || r[7] || '');
     const qty = String(r[6] || r[9] || '');
     const kind = String(b[4] || '釘箱').trim();
-    const layer = Number(b[1]) || (isInner || /^斬盒/.test(kind) || /內/.test(r[3]) ? 3 : 5);
+    const die = /^(斬盒|套板)(釘箱)?$/.exec(kind);
+    const layer = Number(b[1]) || (isInner || die || /內/.test(r[3]) ? 3 : 5);
     const hasMark = String(r[11] || '').trim() || String(r[12] || '').trim();
     const print = b[2] === '' ? !!hasMark : isYes(b[2]);
     const slot = b[3] === '' ? kind !== '平板紙板' : isYes(b[3]);
@@ -825,12 +873,20 @@ function buildOrder(r, b, sched) {
     if (slot) route.push(2);
     if (kind === '釘箱') route.push(3);
     route.push(4);
-    // 斬盒：紙直接送加工廠，不經裁切、印刷、開槽；加工好直接出貨，或回來釘箱再出貨
-    if (kind === '斬盒') route = [4];
-    if (kind === '斬盒釘箱') route = [3, 4];
+    // 斬盒／套板（外加工）：庫存裁切才經裁切站；有印分先印、後印；名稱後面有「釘箱」＝回廠裝釘
+    const timing = String(b[COL_TIMING] || '').trim();
+    const source = die ? String(b[COL_SOURCE] || '').trim() || '訂紙' : '';
+    if (die) {
+      route = source === '庫存裁切' ? [0] : [];
+      if (!print) route.push(5);
+      else if (timing === '後印') route.push(5, 1);
+      else route.push(1, 5);                      // 還沒選的先當先印，看板會提醒要選
+      if (die[2]) route.push(3);
+      route.push(4);
+    }
     const prog = {};
     STATIONS.forEach((s, k) => {
-      const v = String(b[7 + k] || '');
+      const v = String(b[progIndex(k)] || '');
       if (v.indexOf('完成') === 0) prog[k] = 'done';
       else if (v.indexOf('進行中') === 0) prog[k] = 'doing';
     });
@@ -840,6 +896,7 @@ function buildOrder(r, b, sched) {
       flute: String(b[0] || ''), layer: layer, kind: kind,
       material: String(r[isInner ? 8 : 5] || '') || calcMaterial(size, layer, kind),
       rush: isYes(b[5]), sched: sched, note: String(r[13] || ''),
+      die: !!die, timing: timing, source: source, needTiming: !!die && print && !timing,
       route: route, prog: prog, copies: Number(b[12]) || 1,
       orderNo: String(b[13] || ''), type: isInner ? '內盒' : '外箱',
       // 印刷站用：要不要印、麥頭文字、對到的產品ID（照片另外用 getProductPhotos 讀）
@@ -963,7 +1020,7 @@ function updateStation(orderId, station, state) {
       if (String(ids[i][0]) === String(orderId)) {
         const time = Utilities.formatDate(new Date(), TZ, 'M/d HH:mm');
         const text = state === 'done' ? '完成 ' + time : state === 'doing' ? '進行中 ' + time : '';
-        sh.getRange(i + 1, BOARD_START + 7 + k).setValue(text);
+        sh.getRange(i + 1, boardCol(sh, progIndex(k))).setValue(text);
         if (station === '出貨') sh.getRange(i + 1, 15).setValue(state === 'done' ? '已出貨' : '待出貨');
         return '已更新';
       }
@@ -972,4 +1029,35 @@ function updateStation(orderId, station, state) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// 看板上改斬盒／套板的印刷順序、備紙方式（例如紙廠來不及，改用庫存紙裁切）
+function setDieOption(orderId, timing, source) {
+  if (timing && ['先印', '後印'].indexOf(timing) < 0) throw new Error('印刷時機只能是 先印 或 後印');
+  if (source && ['訂紙', '庫存裁切'].indexOf(source) < 0) throw new Error('備紙只能是 訂紙 或 庫存裁切');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  let pid = '';
+  try {
+    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('訂單紀錄');
+    const rows = sh.getDataRange().getValues();
+    let i = 1;
+    while (i < rows.length && String(rows[i][0]) !== String(orderId)) i++;
+    if (i >= rows.length) throw new Error('找不到訂單：' + orderId);
+    const b = rows[i].slice(BOARD_START - 1);
+    const started = k => !!String(b[progIndex(k)] || '');
+    if (source && source !== (String(b[COL_SOURCE] || '') || '訂紙')) {
+      if (started(0) || started(1) || started(5)) throw new Error('這張單已經開工，不能改備紙方式');
+      writeBoardCell(sh, i + 1, COL_SOURCE, source);
+    }
+    if (timing && timing !== String(b[COL_TIMING] || '')) {
+      if (b[COL_TIMING] && (started(1) || started(5))) throw new Error('已經開始印刷或送加工，不能改印刷順序');
+      writeBoardCell(sh, i + 1, COL_TIMING, timing);
+      pid = String(b[14] || '');
+    }
+  } finally {
+    lock.releaseLock();
+  }
+  if (pid) { try { setProductPrintTime(pid, timing); } catch (e) {} }
+  return '已更新';
 }

@@ -154,7 +154,8 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbzXvT3OkQoOKZ2XmmrtFBKh
     throw new Error('密碼錯誤');
   };
 })();
-const STATIONS = ['裁切','印刷','開槽','釘箱','出貨'];
+const STATIONS = ['裁切','印刷','開槽','釘箱','出貨','外加工'];
+const ORDER = [0,1,5,2,3,4];
 const WEEK = '日一二三四五六';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -248,7 +249,8 @@ function card(g, where){
   const nIn = g.items.filter(o => o.type === '內盒').length, nOut = g.items.length - nIn;
   const what = [nIn ? `內盒 ${nIn}` : '', nOut ? `外箱 ${nOut}` : ''].filter(Boolean).join('・');
   const carry = where === 'today' && g.sched < addDays(0) ? `<span class="pill carry">${label(g.sched)} 排的，還沒做完</span>` : '';
-  const prog = where === 'un' ? '' : `<span class="prog">${STATIONS.map((s,i) => {
+  const prog = where === 'un' ? '' : `<span class="prog">${ORDER.map(i => {
+      const s = STATIONS[i];
       const need = g.items.filter(o => o.route.includes(i)); if(!need.length) return '';
       const done = need.filter(o => o.prog[i] === 'done').length;
       return `<a href="${boardLink(g, s)}" target="boardTab" title="打開${s}站的看板" class="${done===need.length?'all':done||need.some(o=>o.prog[i])?'part':''}">${s} ${done}/${need.length}</a>`; }).join('')}</span>`;
@@ -259,10 +261,10 @@ function card(g, where){
   if(where === 'un') acts = `<button class="go" onclick="schedGroup(${ids}, addDays(0))">整張排今天</button><button onclick="schedGroup(${ids}, addDays(1))">排明天</button>${dateBtn}${rushBtn}<button class="light" onclick="shipGroup(${ids})">已出貨</button>`;
   else if(where === 'today') acts = `<button onclick="schedGroup(${ids}, addDays(1))">改明天</button>${dateBtn}${rushBtn}<button class="light" onclick="schedGroup(${ids}, '')">取消排程</button>`;
   else acts = `<button class="go" onclick="schedGroup(${ids}, addDays(0))">提前到今天</button>${dateBtn}${rushBtn}<button class="light" onclick="schedGroup(${ids}, '')">取消排程</button>`;
-  const isOpen = open.has(gid) || g.items.length === 1;
+  const isOpen = open.has(gid) || g.items.length === 1 || g.items.some(o => o.needTiming);
   const rows = g.items.map(o => `<tr>
       <td><span class="type ${o.type==='內盒'?'in':'out'}">${o.type}</span></td>
-      <td>${esc(o.prod)}${o.kind!=='釘箱'?` <span class="pill kind">${esc(o.kind)}</span>`:''}</td>
+      <td>${esc(o.prod)}${o.kind!=='釘箱'?` <span class="pill kind">${esc(o.kind)}</span>`:''}${o.die?dieCtl(o):''}</td>
       <td class="mono">${esc(o.size)||'－'}</td><td>${esc(o.qty)||'－'}</td><td class="mono">${esc(o.material)||'－'}</td>
       <td>${where==='un'?'':`<span class="dots">${o.route.map(i => `<span class="dot ${o.prog[i]||''}">${STATIONS[i]}</span>`).join('')}</span>`}</td>
       <td><button class="idate" onclick="pickDate(this, ['${esc(o.no)}'])">${o.sched ? label(o.sched) : '只排這項'}</button></td>
@@ -306,7 +308,21 @@ function pickDate(btn, nos){
   inp.focus();
   try { inp.showPicker(); } catch(e) {}
 }
-function schedGroup(nos, date){ change(nos, o => { o.sched = date; }, {action:'setSchedule', orderIds:nos, schedDate:date}); }
+// 斬盒／套板：備紙方式、印刷順序（開工後不能改）
+function dieCtl(o){
+  const lock = [0,1,5].some(k => o.prog[k]) ? 'disabled' : '', no = esc(o.no);
+  const sel = (key, val, opts) => `<select aria-label="${key==='timing'?'印刷順序':'備紙方式'}" ${lock && !(key==='timing' && o.needTiming) ? 'disabled' : ''} onchange="dieOption('${no}','${key}',this.value)">${opts.map(([v,t]) => `<option value="${v}" ${v===val?'selected':''}>${t}</option>`).join('')}</select>`;
+  return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${sel('source', o.source, [['訂紙','訂紙'],['庫存裁切','庫存紙裁切']])}${o.print ? sel('timing', o.timing, (o.timing?[]:[['','⚠ 先印或後印？']]).concat([['先印','先印再加工'],['後印','加工回來再印']])) : ''}</div>`;
+}
+async function dieOption(no, key, value){
+  if(!value) return;
+  try{ await post({action:'setDieOption', orderId:no, [key]:value}); await load(); }
+  catch(e){ await load(); $('msg').innerHTML = `<div class="msg err">沒改到：${esc(e.message)}</div>`; }
+}
+function schedGroup(nos, date){
+  const miss = date ? orders.filter(o => nos.includes(o.no) && o.needTiming) : [];
+  if(miss.length){ alert(`「${miss[0].prod}」要印刷，請先在品項那一列選「先印」或「後印」，再排程。`); nos.forEach(n => { const o = orders.find(x => x.no === n); if(o && o.needTiming){ const g = groupOf([o])[0]; ['un','today','tmr','later'].forEach(w => open.add(w+'｜'+g.key)); } }); render(); return; }
+  change(nos, o => { o.sched = date; }, {action:'setSchedule', orderIds:nos, schedDate:date}); }
 function rushGroup(nos, on){ change(nos, o => { o.rush = on; }, {action:'setSchedule', orderIds:nos, rush:on}); }
 async function shipGroup(nos){
   orders = orders.filter(x => !nos.includes(x.no)); render();

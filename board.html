@@ -25,7 +25,7 @@ h1{font-size:20px;margin:0;font-weight:900}
 .focus b{font-size:17px}
 .focus button{font:inherit;font-size:14px;font-weight:700;padding:7px 14px;border-radius:5px;border:none;background:#fff;color:#1a1714;cursor:pointer}
 .meta button{font:inherit;padding:6px 12px;border:1px solid var(--line);background:var(--surface);border-radius:4px;cursor:pointer}
-.stations{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.stations{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
 .st{font:inherit;font-size:17px;font-weight:700;padding:12px 4px;border:2px solid var(--line);background:var(--surface);color:var(--ink);border-radius:6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
 .st small{font-size:12px;color:var(--ink-2);font-weight:500}
 .st[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:#fff}
@@ -151,8 +151,11 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbzXvT3OkQoOKZ2XmmrtFBKh
     throw new Error('密碼錯誤');
   };
 })();
-const STATIONS = ['裁切','印刷','開槽','釘箱','出貨'];
+const STATIONS = ['裁切','印刷','開槽','釘箱','出貨','外加工'];
+const ORDER = [0,1,5,2,3,4];   // 畫面上的排列順序（外加工編號是 5）
 const LABEL = {todo:'待做', doing:'進行中', done:'完成'};
+const OUT_LABEL = {todo:'待送', doing:'加工中', done:'已回廠'};
+const labelOf = (k, s) => (k === 5 ? OUT_LABEL : LABEL)[s];
 const $ = id => document.getElementById(id);
 let orders = [];
 // 每台平板記住自己是哪一站（-1 = 全廠總覽）
@@ -260,7 +263,8 @@ function render() {
   const list = shown();
   $('focusBar').innerHTML = focus ? `<div class="focus"><span>只看這張訂單：<b>${esc(focusTitle)}</b>（今天看板上有 ${list.length} 項）</span><button onclick="clearFocus()">看全部訂單</button></div>` : '';
   if (focus && orders.length && !list.length) $('msg').innerHTML = '<div class="msg info">這張單沒有在今天的看板上：工站看板只顯示排在今天（和之前沒做完）的單。到排程看板按「整張排今天」就會出現。</div>';
-  $('stations').innerHTML = STATIONS.map((n, i) => {
+  $('stations').innerHTML = ORDER.map(i => {
+    const n = STATIONS[i];
     const c = list.filter(o => o.route.includes(i) && stateOf(o, i) !== 'done').length;
     return `<button class="st" aria-pressed="${i === cur}" onclick="pick(${i})">${n}<small>${c} 張未完成</small></button>`;
   }).join('') + `<button class="st" aria-pressed="${cur === -1}" onclick="pick(-1)">全廠<small>${list.length} 張在做</small></button>`;
@@ -278,13 +282,13 @@ function render() {
 
   $('list').innerHTML = mine.map(o => {
     const s = stateOf(o, cur), ready = readyFor(o, cur);
-    const pill = s === 'todo' && !ready ? '<span class="pill todo">等上一站</span>' : `<span class="pill ${s}">${LABEL[s]}</span>`;
+    const pill = s === 'todo' && !ready ? '<span class="pill todo">等上一站</span>' : `<span class="pill ${s}">${labelOf(cur, s)}</span>`;
     const kindTag = o.kind !== '釘箱' ? `<span class="pill kind">${esc(o.kind)}</span>` : '';
     const glue = cur === 2 && o.kind === '糊箱' ? '<div class="note"><b>開槽後糊箱</b></div>' : '';
     const acts = s === 'done'
-      ? `<button class="undo" onclick="setState('${esc(o.no)}','doing',this)">按錯了，改回進行中</button>`
-      : `<button onclick="setState('${esc(o.no)}','doing',this)" ${s === 'doing' ? 'disabled' : ''}>開始</button>
-         <button class="go-done" onclick="setState('${esc(o.no)}','done',this)">完成</button>`;
+      ? `<button class="undo" onclick="setState('${esc(o.no)}','doing',this)">按錯了，改回${labelOf(cur,'doing')}</button>`
+      : `<button onclick="setState('${esc(o.no)}','doing',this)" ${s === 'doing' ? 'disabled' : ''}>${cur === 5 ? '已送出' : '開始'}</button>
+         <button class="go-done" onclick="setState('${esc(o.no)}','done',this)">${cur === 5 ? '已回廠' : '完成'}</button>`;
     return `<div class="card ${o.rush && s !== 'done' ? 'urgent' : ''} ${s === 'done' ? 'done' : ''}">
       <div class="row1"><span class="no">${esc(o.no)}</span><span class="pills">${kindTag}${o.rush && s !== 'done' ? '<span class="pill rush">急件</span>' : ''}${pill}</span></div>
       <div class="cust">${esc(o.cust)}</div>
@@ -295,6 +299,7 @@ function render() {
       <div class="due">交貨 <b>${esc(o.due) || '－'}</b></div>
       ${cur === 0 ? `<div class="ptag ${o.print ? 'yes' : 'no'}">${o.print ? '要印刷' : '不印刷'}</div>` : ''}
       ${cur === 1 ? `<div class="mk">${o.type === '內盒' ? mkSec('內盒印刷', o.front) : mkSec('正嘜', o.front) + mkSec('側嘜', o.side)}${photoHTML(o)}</div>` : ''}
+      ${o.die ? dieHTML(o) : ''}
       ${glue}${o.note ? `<div class="note">${esc(o.note)}</div>` : ''}
       <div class="acts">${acts}</div>
     </div>`;
@@ -303,11 +308,34 @@ function render() {
 }
 
 function renderOverview() {
-  $('ovHead').innerHTML = '<th>客戶</th><th>品名</th><th>尺寸</th><th>數量</th>' + STATIONS.map(n => `<th>${n}</th>`).join('') + '<th>交貨</th>';
+  $('ovHead').innerHTML = '<th>客戶</th><th>品名</th><th>尺寸</th><th>數量</th>' + ORDER.map(i => `<th>${STATIONS[i]}</th>`).join('') + '<th>交貨</th>';
   const list = [...shown()].sort(byPriority);
   $('ovBody').innerHTML = list.length ? list.map(o => `<tr><td><b>${esc(o.cust)}</b>${o.rush ? ' <span class="pill rush">急</span>' : ''}</td><td>${esc(o.prod)}</td><td class="mono-s">${esc(o.size)||'－'}</td><td>${esc(o.qty)||'－'}</td>${
-    STATIONS.map((_, i) => o.route.includes(i) ? `<td><span class="dot ${stateOf(o, i)}" title="${LABEL[stateOf(o, i)]}"></span></td>` : '<td class="dash">—</td>').join('')
-  }<td>${esc(o.due)}</td></tr>`).join('') : `<tr><td colspan="10" style="padding:30px;text-align:center;color:var(--ink-2)">目前沒有排程的單。到試算表「訂單紀錄」填上排程日期就會出現。</td></tr>`;
+    ORDER.map(i => o.route.includes(i) ? `<td><span class="dot ${stateOf(o, i)}" title="${labelOf(i, stateOf(o, i))}"></span></td>` : '<td class="dash">—</td>').join('')
+  }<td>${esc(o.due)}</td></tr>`).join('') : `<tr><td colspan="11" style="padding:30px;text-align:center;color:var(--ink-2)">目前沒有排程的單。到試算表「訂單紀錄」填上排程日期就會出現。</td></tr>`;
+}
+
+// 斬盒／套板的提醒和按鈕：下一步做什麼、補選印刷順序、改備紙方式
+function dieHTML(o) {
+  const no = esc(o.no), stock = o.source === '庫存裁切', after = o.print && o.timing === '後印';
+  const text = cur === 0 ? `庫存紙裁成用料尺寸，裁好${o.route[1] === 1 ? '先送印刷' : '送加工廠'}`
+    : cur === 1 ? (after ? '後印：加工回廠後印刷' : '先印：印完送加工廠')
+    : cur === 5 ? (stock ? '紙：庫存紙廠內裁切' : o.route[0] === 5 ? '紙：訂紙，紙廠直接送加工廠' : '紙：訂紙，先進廠印刷') + (after ? '・回廠後要印刷' : '') : '';
+  let h = text ? `<div class="note"><b>${text}</b></div>` : '';
+  if (o.needTiming) h += `<div class="mkwarn">⚠ 還沒選什麼時候印（目前暫排先印）
+    <div class="acts"><button onclick="dieOption('${no}',{timing:'先印'})">先印再加工</button><button onclick="dieOption('${no}',{timing:'後印'})">加工回來再印</button></div></div>`;
+  const untouched = [0,1,5].every(k => !o.prog[k]);
+  if (untouched && cur === o.route[0]) h += `<div class="acts"><button class="undo" onclick="dieOption('${no}',{source:'${stock ? '訂紙' : '庫存裁切'}'})">${stock ? '改回訂紙' : '紙廠來不及 → 改用庫存紙裁切'}</button></div>`;
+  return h;
+}
+async function dieOption(no, opt) {
+  if (opt.source && !confirm(opt.source === '庫存裁切' ? '改用庫存紙裁切？會加到裁切站。\n紙廠那邊的訂單要另外取消或確認。' : '改回訂紙？會從裁切站移除。\n請記得跟紙廠訂紙。')) return;
+  try {
+    const res = await fetch(GAS_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify(Object.assign({action:'setDieOption', orderId:no}, opt))});
+    const d = await res.json();
+    if (!d.success) throw new Error(d.error || '寫入失敗');
+    await load();
+  } catch (e) { $('msg').innerHTML = `<div class="msg err">沒改到：${esc(e.message)}</div>`; }
 }
 
 async function setState(no, state, btn) {
