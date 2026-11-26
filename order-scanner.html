@@ -897,7 +897,7 @@ const PAPER_VENDORS = {
     smallArea: 100, smallFee: 1, // 單筆未滿 100㎡，每㎡加 1 元
     trim: 6,                // 修邊：整條紙寬要留 6 台分
     maxLanes: 2,            // 華豐最多剖 2 條；其他廠商不設限就不要寫
-    creaseFromQty: 100,     // 紙箱數量超過 100 個，請紙廠直接壓線（我們少一道工序）
+    creaseFromQty: 100,     // 紙箱數量 100 個（含）以上，請紙廠直接壓線（我們少一道工序）；訂紙量夠（達最少米數）時，幾十個也壓
     creaseMin: {}           // 壓線的最少米數：{紙寬台分: 米數}；沒寫的紙寬＝和一般最少米數一樣（華豐目前每個寬度都一樣）
   }
 };
@@ -984,12 +984,27 @@ function calcPaperOrder({A, B, qty, per = 1, vendor = 'huafeng', tiers = [], cre
   return {ok:true, vendor:V.name, pieces, cut, mult, priced, crease, best:c, others, tips, warn};
 }
 
+// 壓線位置：五層 (摺邊+1)｜箱高｜(摺邊+1)；三層 摺邊｜箱高｜摺邊；摺邊＝箱寬÷2
+function creaseLine(nd) {
+  if (!nd.h || !nd.w || !['外箱', '內箱', '斬式'].includes(nd.kind)) return '<div class="alt">這個箱型的壓線位置請自己確認</div>';
+  const five = nd.layer === 5, f = nd.w / 2 + (five ? 1 : 0), sum = 2 * f + nd.h;
+  const n = x => String(Math.round(x * 10) / 10), nm = five ? '摺邊+1' : '摺邊';
+  return `<div>壓線位置（每條紙寬 ${nd.A}）：<b>${n(f)} ｜ ${nd.h} ｜ ${n(f)}</b>（${nm} ｜ 箱高 ｜ ${nm}）</div>` +
+    (Math.abs(sum - nd.A) > 0.01 ? `<div class="tip">⚠ 壓線合計 ${n(sum)} 和用紙寬 ${nd.A} 不同，請確認再報給紙廠</div>` : '');
+}
+
 // 訂紙建議的畫面
 function paperOrderHTML(nd, pieces, label) {
   if (!pieces) return '';
   const tiers = paperTiers(PAPER_VENDORS.huafeng.name, nd.mat);
-  const V = PAPER_VENDORS.huafeng, crease = nd.qty > V.creaseFromQty;   // 數量超過 100 個 → 請紙廠壓線
-  const r = calcPaperOrder({A: nd.A, B: nd.B, qty: pieces, per: 1, tiers, crease});
+  const V = PAPER_VENDORS.huafeng, args = {A: nd.A, B: nd.B, qty: pieces, per: 1, tiers};
+  // 要不要請紙廠壓線：數量 100 個以上；或訂紙量夠（算出的米數已達紙廠最少米數）幾十個也壓；斬盒不壓
+  let crease = !nd.die && nd.qty >= V.creaseFromQty, why = crease ? `數量 ${nd.qty} 個，${V.creaseFromQty} 個以上` : '';
+  let r = calcPaperOrder({...args, crease});
+  if (!crease && !nd.die && r.ok && r.best.needM >= r.best.minM - 1e-9) {
+    crease = true; why = `訂紙量夠（約 ${Math.ceil(r.best.needM)} 米，已達最少 ${r.best.minM} 米）`;
+    r = calcPaperOrder({...args, crease});
+  }
   if (!r.ok) return `<div class="pord"><div class="stk-head">📄 訂紙建議${label || ''}</div>${r.warn.map(w => `<div class="tip">⚠ ${esc(w)}</div>`).join('')}</div>`;
   const b = r.best;
   const money = r.priced
@@ -998,7 +1013,8 @@ function paperOrderHTML(nd, pieces, label) {
   return `<div class="pord"><div class="stk-head">📄 訂紙建議（${esc(r.vendor)}）${label || ''}</div>
     <div>訂 <b>${b.W} 台分（${b.mm}mm）× ${b.orderM} 米</b>（長 ${Math.round(b.orderM / TAIFEN_M).toLocaleString()} 台分）${b.k > 1 ? `，剖 ${b.k} 條` : ''}・約 ${b.area.toFixed(0)}㎡・做 ${r.pieces} 片、多出 ${b.extra} 片・損耗 ${(Math.max(b.waste, 0) * 100).toFixed(1)}%</div>
     ${money}
-    <div>${crease ? `✂ <b>請紙廠直接壓線</b>（數量 ${nd.qty} 個，超過 ${V.creaseFromQty} 個）：壓好線的紙板，我們少一道工序` : `數量 ${nd.qty} 個，不超過 ${V.creaseFromQty} 個，不用請紙廠壓線`}</div>
+    <div>${crease ? `✂ <b>請紙廠直接壓線</b>（${why}）：壓好線的紙板，我們少一道工序` : nd.die ? '斬盒：紙直接送加工廠，不用請紙廠壓線' : `數量 ${nd.qty} 個、訂紙量也不到最少米數，先不請紙廠壓線`}</div>
+    ${crease ? creaseLine(nd) : ''}
     ${r.tips.concat(r.warn).map(t => `<div class="tip">⚠ ${esc(t)}</div>`).join('')}
     ${r.others.length ? `<div class="alt">其他選擇：${r.others.map(o => `${o.W} 台分 × ${o.orderM} 米${o.cost != null ? `（NT$${o.cost.toLocaleString()}）` : ''}`).join('、')}</div>` : ''}</div>`;
 }
@@ -1015,7 +1031,8 @@ function stockNeed(slot) {
   const n = use.match(/×\s*(\d+)\s*張/), per = n ? +n[1] : 1;
   const qty = parseInt(String($(slot === 'outer' ? 'f_outer_qty' : 'f_inner_qty').value).replace(/[^\d]/g, ''), 10) || 0;
   const P = pm[slot] && pm[slot].prod, white = !!(P && /白/.test(P.紙色 || ''));
-  return {A:+m[1], B:+m[2], per, qty, mat:(P && P.材質) || '', need:Math.ceil(qty * per * (1 + STK.loss)), layer, white, die, auto:!raw, split: use !== raw && !!raw};
+  const sz = parseSize($(S.size).value) || {};
+  return {A:+m[1], B:+m[2], per, qty, mat:(P && P.材質) || '', w: sz.w, h: sz.h, kind: die ? kindOf('outer') : kindOf(slot), need:Math.ceil(qty * per * (1 + STK.loss)), layer, white, die, auto:!raw, split: use !== raw && !!raw};
 }
 function stockMatch(nd) {
   const out = [];
