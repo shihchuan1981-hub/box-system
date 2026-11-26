@@ -1009,9 +1009,9 @@ function renderStock() {
         <span>一張裁 ${x.pcs} 片・浪費 ${(x.waste * 100).toFixed(1)}%</span><span>約 ${esc(x.s.張數)} 張 → ${x.make} 片</span>${x.rot ? '<span class="stk-rot">要轉向</span>' : ''}${st}</div>`;
     }).join('');
     // 庫存最好的一筆也不夠 → 照不足的片數算訂紙
-    if (nd.qty && !list.some(x => x.make >= nd.need)) {
-      const short = nd.need - list[0].make;
-      h += paperOrderHTML(nd, short, `：庫存還差 ${short} 片`);
+    if (nd.qty) {
+      if (list.some(x => x.make >= nd.need)) h += paperOrderHTML(nd, nd.need, '：庫存夠用，不用訂；若要另外訂紙');
+      else { const short = nd.need - list[0].make; h += paperOrderHTML(nd, short, `：庫存還差 ${short} 片`); }
     }
     el.innerHTML = h;
   });
