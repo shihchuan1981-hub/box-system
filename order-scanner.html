@@ -894,7 +894,7 @@ const PAPER_VENDORS = {
     mustSplitFrom: 429,     // 運輸關係：紙寬 429 以上要剖開（至少 2 條）
     minSlit: 89,            // 最小可剖紙寬
     minCut: 190, maxCut: 1254,   // 紙長（裁切長度）範圍
-    smallArea: 100, smallFee: 1, // 單筆未滿 100㎡，每㎡加 1 元
+    smallArea: 100, smallM: 100, smallFee: 1, // 華豐：訂紙未滿 100 米，每㎡加 1 元（價格含稅）
     trim: 6,                // 修邊：整條紙寬要留 6 台分
     maxLanes: 2,            // 華豐最多剖 2 條；其他廠商不設限就不要寫
     creaseFromQty: 100,     // 紙箱數量 100 個（含）以上，請紙廠直接壓線（我們少一道工序）；訂紙面積滿 100㎡ 時，幾十個也壓
@@ -936,7 +936,7 @@ function calcPaperOrder({A, B, qty, per = 1, vendor = 'huafeng', tiers = [], cre
   // 某個紙寬、某個米數的完整算法
   const make = (W, k, minM, tag, needM, orderM, bump) => {
     const Wm = W * TAIFEN_M, area = Wm * orderM;
-    const fee = area < V.smallArea ? area * V.smallFee : 0;
+    const fee = orderM < V.smallM ? area * V.smallFee : 0;
     const unit = priced ? priceAt(orderM) : null;
     return {W, mm: Math.round(W*10/3.3), k, lane, trim: W - k*lane, minM, needM, orderM, area, fee: Math.round(fee),
       got: Math.floor(orderM / rowM + 1e-9) * k * mult, extra: Math.floor(orderM / rowM + 1e-9) * k * mult - pieces,
@@ -957,7 +957,8 @@ function calcPaperOrder({A, B, qty, per = 1, vendor = 'huafeng', tiers = [], cre
     if (tag === 'special' && Wm * orderM < V.specialMinArea) orderM = Math.ceil(V.specialMinArea / Wm);
     const base = make(W, k, minM, tag, needM, orderM, false);
     baseOf[W] = base; cands.push(base);
-    tiers.forEach(t => { if (t.m > orderM) cands.push(make(W, k, minM, tag, needM, Math.ceil(t.m), true)); });   // 多訂到更便宜的級距
+    const jumps = tiers.map(t => t.m); if (V.smallM) jumps.push(V.smallM);   // 單價級距、免加價的 100 米
+    jumps.forEach(m => { if (m > orderM) cands.push(make(W, k, minM, tag, needM, Math.ceil(m), true)); });   // 多訂到更便宜的級距
   });
   if (!cands.length) return {ok:false, warn:[`${V.name}沒有能裁出紙寬 ${A} 的寬度（429 以上要剖開，最寬 825）。要換廠，或把紙轉向`]};
   // 選法：有單價 → 總價最低；沒單價 → 訂的總面積最小。再比多出片數少 → 寬度小
@@ -973,9 +974,9 @@ function calcPaperOrder({A, B, qty, per = 1, vendor = 'huafeng', tiers = [], cre
     if (nx) { const d = nx.cost - c.cost;
       tips.push(`再多訂 ${nx.orderM - c.orderM} 米到 ${nx.orderM} 米，單價 ${nx.unit} 元/㎡，總價 NT$${nx.cost}（比現在${d >= 0 ? '多' : '少'} NT$${Math.abs(d)}），多出 ${nx.extra} 片`); }
   }
-  if (c.area < V.smallArea) {
-    const needMore = Math.ceil(V.smallArea / (c.W * TAIFEN_M)) - c.orderM;
-    tips.push(`未滿 ${V.smallArea}㎡（約 ${c.area.toFixed(0)}㎡），每㎡加 ${V.smallFee} 元，約加價 NT$${c.fee}；再多訂 ${needMore} 米就滿 ${V.smallArea}㎡免加價，或和同寬度的單合併成一筆訂（可以合併）`);
+  if (c.orderM < V.smallM) {
+    const needMore = V.smallM - c.orderM;
+    tips.push(`未滿 ${V.smallM} 米（訂 ${c.orderM} 米），每㎡加 ${V.smallFee} 元，約加價 NT$${c.fee}；再多訂 ${needMore} 米就滿 ${V.smallM} 米免加價，或和同寬度的單合併成一筆訂（可以合併）`);
   }
   if (c.split) tips.push(`${c.W} 台分${V.name}要剖開：剖 ${c.k} 條，每條 ${c.lane}，剩 ${c.trim} 台分（含修邊 ${V.trim}）`);
   else if (c.k > 1) tips.push(`剖 ${c.k} 條，每條 ${c.lane}，剩 ${c.trim} 台分（含修邊 ${V.trim}）`);
@@ -1008,7 +1009,7 @@ function paperOrderHTML(nd, pieces, label) {
   if (!r.ok) return `<div class="pord"><div class="stk-head">📄 訂紙建議${label || ''}</div>${r.warn.map(w => `<div class="tip">⚠ ${esc(w)}</div>`).join('')}</div>`;
   const b = r.best;
   const money = r.priced
-    ? `<div>預估紙價 <b>NT$${b.cost.toLocaleString()}</b>（${b.unit} 元/㎡ × ${b.area.toFixed(0)}㎡${b.fee ? `，含未滿 100㎡ 加價 ${b.fee}` : ''}）</div>`
+    ? `<div>預估紙價 <b>NT$${b.cost.toLocaleString()}</b> 含稅（${b.unit} 元/㎡ × ${b.area.toFixed(0)}㎡${b.fee ? `，含未滿 ${V.smallM} 米加價 ${b.fee}` : ''}）</div>`
     : `<div class="alt">${paperPrice.length ? `紙價表沒有「${esc(nd.mat || '這個材質')}」的單價` : '紙價表還沒填單價'}，目前先比用紙面積（填了就會比總價）</div>`;
   return `<div class="pord"><div class="stk-head">📄 訂紙建議（${esc(r.vendor)}）${label || ''}</div>
     <div>紙箱用紙：<b>${nd.A}×${nd.B}${nd.per > 1 ? ` ×${nd.per}張（二片接）` : ''}</b> 台分</div>
