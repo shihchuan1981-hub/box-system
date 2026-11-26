@@ -992,7 +992,7 @@ function paperOrderHTML(nd, pieces, label) {
     ? `<div>預估紙價 <b>NT$${b.cost.toLocaleString()}</b>（${b.unit} 元/㎡ × ${b.area.toFixed(0)}㎡${b.fee ? `，含未滿 100㎡ 加價 ${b.fee}` : ''}）</div>`
     : `<div class="alt">${paperPrice.length ? `紙價表沒有「${esc(nd.mat || '這個材質')}」的單價` : '紙價表還沒填單價'}，目前先比用紙面積（填了就會比總價）</div>`;
   return `<div class="pord"><div class="stk-head">📄 訂紙建議（${esc(r.vendor)}）${label || ''}</div>
-    <div>訂 <b>${b.W} 台分（${b.mm}mm）× ${b.orderM} 米</b>${b.k > 1 ? `，剖 ${b.k} 條` : ''}・約 ${b.area.toFixed(0)}㎡・做 ${r.pieces} 片、多出 ${b.extra} 片・損耗 ${(Math.max(b.waste, 0) * 100).toFixed(1)}%</div>
+    <div>訂 <b>${b.W} 台分（${b.mm}mm）× ${b.orderM} 米</b>（長 ${Math.round(b.orderM / TAIFEN_M).toLocaleString()} 台分）${b.k > 1 ? `，剖 ${b.k} 條` : ''}・約 ${b.area.toFixed(0)}㎡・做 ${r.pieces} 片、多出 ${b.extra} 片・損耗 ${(Math.max(b.waste, 0) * 100).toFixed(1)}%</div>
     ${money}
     ${r.tips.concat(r.warn).map(t => `<div class="tip">⚠ ${esc(t)}</div>`).join('')}
     ${r.others.length ? `<div class="alt">其他選擇：${r.others.map(o => `${o.W} 台分 × ${o.orderM} 米${o.cost != null ? `（NT$${o.cost.toLocaleString()}）` : ''}`).join('、')}</div>` : ''}</div>`;
