@@ -296,6 +296,21 @@ function getPaperMap() {
   }
   return out;
 }
+// ═══ 斬盒用紙表（只讀，給接單頁帶斬盒／套板的用紙）═══
+// 分頁「斬盒用紙表」第一列是欄名：客戶｜品名｜類型(斬盒/套板)｜商品尺寸｜用紙｜一張幾個｜材質｜狀態(已確認/待確認/推算)｜供應商｜最低訂量｜備註
+// 老闆直接在試算表改就會生效；「待確認」改成「已確認」後，接單頁就不再提醒
+function getDiePaper() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('斬盒用紙表');
+  if (!sh) return [];
+  const v = sh.getDataRange().getDisplayValues(), h = v[0].map(x => String(x).trim()), out = [];
+  for (let i = 1; i < v.length; i++) {
+    const o = {};
+    h.forEach((k, c) => { if (k) o[k] = String(v[i][c]).trim(); });
+    if (o['客戶'] && o['品名'] && o['類型']) out.push(o);
+  }
+  return out;
+}
+
 // 第一次使用：執行一次 setupPaperPrice，會建立「紙價表」分頁（已存在就不動）
 function setupPaperPrice() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -706,6 +721,10 @@ function doGet(e) {
   }
   if (action === 'getPaperMap') {
     try { return ok(getPaperMap()); }
+    catch (err) { return ContentService.createTextOutput(JSON.stringify({success:false, error:err.message})).setMimeType(ContentService.MimeType.JSON); }
+  }
+  if (action === 'getDiePaper') {
+    try { return ok(getDiePaper()); }
     catch (err) { return ContentService.createTextOutput(JSON.stringify({success:false, error:err.message})).setMimeType(ContentService.MimeType.JSON); }
   }
   if (action === 'getProducts') {

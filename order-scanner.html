@@ -822,7 +822,7 @@ function applyTo(it, slot, p, manual) {
   const osz = sizeKey(tget(it, S.size));
   if (!osz && p.尺寸) tset(it, S.size, p.尺寸);
   // 尺寸一樣才帶資料庫的用紙；客戶改了尺寸就讓公式重算
-  if (!tget(it, S.mat).trim() && p.用紙 && (!osz || osz === sizeKey(p.尺寸))) tset(it, S.mat, slot === 'outer' ? splitMat(p.用紙, tget(it, S.size) || p.尺寸, p.箱型 || '外箱', p.層數 || 5) : p.用紙);
+  if (!(slot === 'outer' && typeOf(it) === 'die') && !tget(it, S.mat).trim() && p.用紙 && (!osz || osz === sizeKey(p.尺寸))) tset(it, S.mat, slot === 'outer' ? splitMat(p.用紙, tget(it, S.size) || p.尺寸, p.箱型 || '外箱', p.層數 || 5) : p.用紙);
   if (slot === 'outer' && (p.正嘜 || p.側嘜)) { tset(it, 'f_front_mark', p.正嘜 || ''); tset(it, 'f_side_mark', p.側嘜 || ''); }
   if (slot === 'inner' && p.正嘜 && !tget(it, 'f_inner_mark').trim()) tset(it, 'f_inner_mark', p.正嘜);
   // 老闆手動點選的，把 AI 這次讀到的寫法記下來，下次就直接對到
@@ -1026,14 +1026,128 @@ function paperOrderHTML(nd, pieces, label) {
     ${r.others.length ? `<div class="alt">其他選擇：${r.others.map(o => `${o.W} 台分 × ${o.orderM} 米${o.cost != null ? `（NT$${o.cost.toLocaleString()}）` : ''}`).join('、')}</div>` : ''}</div>`;
 }
 
+// ═══ 斬盒／套板用紙：先查試算表「斬盒用紙表」（老闆的手寫本），本子沒有的斬盒用公式推算 ═══
+// 用紙欄的寫法：「173×286 ÷2」＝一張紙做 2 個，訂紙張數＝數量÷2（除不盡進位）
+let diePaper = [], diePaperState = 'loading';
+const GUESS_TAG = '（推算，請確認）', PEND_TAG = '（本子待確認，請確認）';
+const MAT_CODE = {'5P':'611s5', '3P':'4+3'};   // 本子寫的 5P、3P → 永發材質（華豐的對應寫在試算表「材質對照」）
+async function loadDiePaper() {
+  try {
+    const r = await fetch(`${GAS_URL}?action=getDiePaper`); const d = await r.json();
+    if (!d.success || !Array.isArray(d.data)) throw 0;
+    diePaper = d.data; diePaperState = 'ok';
+  } catch (e) { diePaperState = 'error'; }
+  renderDie(); renderStock();
+}
+const paperSize = s => { const m = String(s || '').match(/(\d+(?:\.\d+)?)\s*[×xX*]\s*(\d+(?:\.\d+)?)/); return m ? {A:+m[1], B:+m[2]} : null; };
+const perSheet = s => { const m = String(s || '').match(/[÷/]\s*(\d+)/); return m && +m[1] > 0 ? +m[1] : null; };
+// 品名對得上：完全一樣，或後面接的不是數字、英文、「-」（12-1063 不會對到 12-1063-1）
+function dieNameHit(name, code) {
+  const n = String(name || '').trim().toUpperCase(), c = String(code || '').trim().toUpperCase();
+  return !!c && n.startsWith(c) && !/^[0-9A-Z.\-]/.test(n.slice(c.length));
+}
+function findDieRow(cust, names, type) {
+  const c = String(cust || '').replace(/\s+/g, ''); if (!c) return null;
+  const rows = diePaper.filter(r => { const rc = String(r.客戶 || '').replace(/\s+/g, ''); return rc && (c.includes(rc) || rc.includes(c)) && r.類型 === type; });
+  for (const nm of names) {
+    const hit = rows.filter(r => dieNameHit(nm, r.品名)).sort((a, b) => b.品名.length - a.品名.length)[0];
+    if (hit) return hit;
+  }
+  return null;
+}
+// 系統該帶的用紙。src：book 本子已確認｜pending 本子待確認｜guess 公式推算｜none 沒辦法算
+function dieAuto({cust, names, size, type}) {
+  const row = findDieRow(cust, names, type), notes = [], sz = parseSize(size);
+  const sizeDiff = !!(row && sizeKey(row.商品尺寸) && sizeKey(size) && sizeKey(row.商品尺寸) !== sizeKey(size));
+  if (diePaperState === 'error') notes.push('用紙表沒讀到，請重新整理網頁再確認一次');
+  if (sizeDiff) notes.push(`本子上 ${row.品名} 的尺寸是 ${row.商品尺寸}，這張單是 ${size}，尺寸不一樣，所以不套本子的用紙`);
+  if (row && !sizeDiff) {
+    if (row.備註) notes.push('本子備註：' + row.備註);
+    // 同一個品名在本子上有兩種以上的紙（例如 5P 一種、3P 一種）→ 全部列出來，不能默默只帶第一個
+    const all = diePaper.filter(r => r.客戶 === row.客戶 && r.品名 === row.品名 && r.類型 === row.類型);
+    const kinds = [...new Set(all.map(r => `${r.用紙}${r.一張幾個 ? ' ÷' + r.一張幾個 : ''}${r.材質 ? '（' + r.材質 + '）' : ''}`))];
+    if (kinds.length > 1) notes.unshift(`⚠ 本子上 ${row.品名} 有 ${kinds.length} 種紙：${kinds.join('、')}。下面只帶第 1 種，如果是兩片都要做，其他的要另外訂`);
+    const ps = paperSize(row.用紙), per = parseInt(row.一張幾個, 10) || null;
+    if (!ps) return {src:'none', text:'', per:null, row, notes};
+    const src = row.狀態 === '推算' ? 'guess' : row.狀態 === '已確認' ? 'book' : 'pending';
+    return {src, per, row, notes, text:`${ps.A}×${ps.B}${per ? ' ÷' + per : ''}${src === 'guess' ? GUESS_TAG : src === 'pending' ? PEND_TAG : ''}`};
+  }
+  if (type === '斬盒' && sz) {   // 只適用一張做 2 個的一般斬盒
+    const A = Math.ceil((sz.w + sz.h) * 2 + 32), B = Math.ceil((sz.l + sz.w) * 2 + 12);
+    notes.push('推算公式：(寬+高)×2+32 ✕ (長+寬)×2+12，一張做 2 個。盒型特殊或一張只能做 1 個、3 個的會不準');
+    return {src:'guess', text:`${A}×${B} ÷2${GUESS_TAG}`, per:2, row:null, notes};
+  }
+  notes.push(type === '套板' ? '本子沒有這個套板，套板沒辦法推算，請在用紙欄手動填（例：140×142 ÷2）' : '尺寸要有長×寬×高才能推算');
+  return {src:'none', text:'', per:null, row:null, notes};
+}
+const dieNames = (it, P, product) => [P && P.outer && P.outer.prod && P.outer.prod.品名, product, it && it._ai].filter(Boolean);
+// 老闆自己打的（或訂單上讀到的）用紙才算數；系統從產品資料帶進來的舊用紙不算（那是 1 個 1 張的舊算法）
+const dieRaw = (it, v) => { const s = it && it._sys && it._sys.outer_material; v = String(v || '').trim(); return s !== undefined && v === String(s).trim() && !editingOrderId ? '' : v; };
+// 最後要用的用紙：手動優先，沒填才用系統帶的。per＝一張做幾個（不知道是 null）
+function dieEff({it, P, cust, product, size, raw}) {
+  const type = (it ? it._dieName : editDie.name) || '斬盒';
+  const auto = dieAuto({cust, names: dieNames(it, P, product), size, type});
+  const manual = dieRaw(it, raw);
+  if (!manual) return {...auto, auto, manual:false};
+  const a = paperSize(manual), b = auto.row && paperSize(auto.row.用紙);
+  const same = !!(a && b && a.A === b.A && a.B === b.B);
+  return {src:'manual', text:manual, per: perSheet(manual) || (same ? parseInt(auto.row.一張幾個, 10) || null : null), row: auto.row, notes: auto.notes, auto, manual:true};
+}
+function dieNow() {   // 畫面上這一筆
+  const it = curItem();
+  return dieEff({it, P: pm, cust: currentCustomer ? currentCustomer.name : '', product: $('f_product').value, size: $('f_outer_size').value, raw: $('f_outer_material').value});
+}
+const dieRowLayer = r => r && /^5P$/i.test(r.材質 || '') ? '5' : r && /^3P$|\+3$/i.test(r.材質 || '') ? '3' : '';
+const dieMatCode = r => { const m = String((r && r.材質) || '').trim(); return MAT_CODE[m.toUpperCase()] || (/613/.test(m) ? '613' : m); };
+const dieSheets = (qty, per) => qty && per ? Math.ceil(qty / per) : 0;
+const qtyNum = v => parseInt(String(v || '').replace(/[^\d]/g, ''), 10) || 0;
+function diePaperHTML() {
+  const e = dieNow(), qty = qtyNum($('f_outer_qty').value), r = e.row;
+  const badge = {book:['📒 手寫本（已確認）','var(--success, #1e7e45)'], pending:['⚠ 手寫本待確認，請確認','var(--accent)'],
+    guess:['⚠ 推算，請確認','var(--accent)'], none:['⚠ 沒有用紙資料','var(--accent)'], manual:['✏️ 用紙欄填的','inherit']}[e.src];
+  const tagged = e.text.includes(GUESS_TAG) || e.text.includes(PEND_TAG);
+  const color = tagged ? 'var(--accent)' : badge[1], label = tagged && e.src === 'manual' ? '⚠ 請確認' : badge[0];
+  const clean = e.text.replace(GUESS_TAG, '').replace(PEND_TAG, '').trim();
+  let h = `<div class="die-paper" style="border:2px solid ${color === 'inherit' ? '#bbb' : color};border-radius:8px;padding:8px 10px;margin-top:8px">
+    <div style="font-weight:700;color:${color}">${label}</div>`;
+  if (clean) h += `<div>用紙 <b>${esc(clean)}</b>${e.per ? `（一張做 ${e.per} 個）` : ''}</div>`;
+  if (clean && qty) h += e.per ? `<div>訂紙 <b>${dieSheets(qty, e.per)} 張</b>（${qty} 個 ÷ ${e.per}）</div>`
+    : `<div style="color:var(--accent)">不知道一張做幾個，張數請自己算${e.manual ? '（在用紙後面加 ÷2 這樣寫）' : ''}</div>`;
+  if (r && r.材質) h += `<div><small>本子材質：${esc(r.材質)}${MAT_CODE[String(r.材質).toUpperCase()] ? `（永發 ${MAT_CODE[String(r.材質).toUpperCase()]}）` : ''}${r.供應商 ? `・跟 ${esc(r.供應商)} 訂` : ''}</small></div>`;
+  const untag = t => t.replace(GUESS_TAG, '').replace(PEND_TAG, '').trim();
+  const notes = e.manual && untag(e.auto.text) === clean && !tagged ? e.notes.filter(n => !n.startsWith('推算公式')) : e.notes;
+  if (e.manual && e.auto.text && untag(e.auto.text) !== clean) h += `<div><small>系統原本算的：${esc(e.auto.text)}</small></div>`;
+  h += notes.map(n => `<div><small>${esc(n)}</small></div>`).join('');
+  if (tagged || (!e.manual && (e.src === 'guess' || e.src === 'pending')))
+    h += `<button type="button" class="pm-cand" style="margin-top:6px" onclick="confirmDiePaper()">✓ 看過了，尺寸沒問題</button>`;
+  return h + '</div>';
+}
+function confirmDiePaper() {
+  const clean = dieNow().text.replace(GUESS_TAG, '').replace(PEND_TAG, '').trim(); if (!clean) return;
+  const it = curItem();
+  $('f_outer_material').value = clean;
+  if (it) { it.outer_material = clean; if (it._sys) delete it._sys.outer_material; }
+  renderDie(); renderStock();
+}
+
 function stockNeed(slot) {
   const t = boxType;
   if (slot === 'outer' ? !isOut(t) : !isIn(t)) return null;
-  const S = SLOT[slot], raw = $(S.mat).value.trim();
+  const S = SLOT[slot];
   const die = slot === 'outer' && t === 'die';
+  if (die) {   // 斬盒／套板：張數＝數量÷一張幾個
+    const e = dieNow(), ps = paperSize(e.text); if (!ps) return null;
+    const qty = qtyNum($('f_outer_qty').value), per = e.per || (e.manual ? 1 : null);
+    const P = pm.outer && pm.outer.prod, sz = parseSize($(S.size).value) || {};
+    return {A:ps.A, B:ps.B, per:1, n:per, noN:!e.per, qty, need: dieSheets(qty, per), mat: e.row && e.row.材質 ? dieMatCode(e.row) : (P && P.材質) || '',
+      white: e.row && e.row.材質 ? /白/.test(e.row.材質) : !!(P && /白/.test(P.紙色 || '')), w: sz.w, h: sz.h, kind: kindOf('outer'),
+      layer: +dieOf(curItem()).layer, die:true, auto:!e.manual, split:false, supplier: (e.row && e.row.供應商) || '', minQty: parseInt(e.row && e.row.最低訂量, 10) || 0,
+      check: e.src === 'guess' || e.src === 'pending' || /請確認/.test(e.text)};
+  }
+  const raw = $(S.mat).value.trim();
   const layer = die ? +dieOf(curItem()).layer : layerOf(slot);
-  const calc = raw ? '' : (die ? calcMat($(S.size).value, kindOf('outer'), layer) : calcMaterial($(S.size).value, slot));
-  const use = raw ? (slot === 'outer' && !die ? splitMat(raw, $(S.size).value, kindOf('outer'), layer) : raw) : calc;
+  const calc = raw ? '' : calcMaterial($(S.size).value, slot);
+  const use = raw ? (slot === 'outer' ? splitMat(raw, $(S.size).value, kindOf('outer'), layer) : raw) : calc;
   const m = use.match(/(\d+(?:\.\d+)?)\s*[×xX*]\s*(\d+(?:\.\d+)?)/); if (!m) return null;
   const n = use.match(/×\s*(\d+)\s*張/), per = n ? +n[1] : 1;
   const qty = parseInt(String($(slot === 'outer' ? 'f_outer_qty' : 'f_inner_qty').value).replace(/[^\d]/g, ''), 10) || 0;
@@ -1060,13 +1174,20 @@ function stockMatch(nd) {
 function renderStock() {
   ['outer', 'inner'].forEach(slot => {
     const el = $('stk_' + slot); if (!el) return;
-    const nd = stock.length ? stockNeed(slot) : null;
+    const nd = stock.length || (slot === 'outer' && boxType === 'die') ? stockNeed(slot) : null;
     if (!nd) { el.style.display = 'none'; return; }
     el.style.display = '';
     const size = `${nd.A}×${nd.B}`;
-    let h = `<div class="stk-head">📦 備料建議：用紙 ${size}${nd.per > 1 ? ` ×${nd.per}張（二片接）` : ''}${nd.auto ? '（自動算）' : ''}${nd.qty ? `，共要 ${nd.need} 張${nd.per > 1 ? `（${nd.qty}×${nd.per}）` : ''}` : '（數量填了才算張數）'}${nd.split ? `<br><small style="font-weight:400;color:var(--warning)">用紙欄寫 ${esc($(SLOT[slot].mat).value)}，長＋寬超過 ${JOIN}，照二片接算</small>` : ''}</div>`;
+    let h = `<div class="stk-head">📦 備料建議：用紙 ${size}${nd.per > 1 ? ` ×${nd.per}張（二片接）` : ''}${nd.die ? (nd.noN ? '' : `（一張做 ${nd.n} 個）`) : nd.auto ? '（自動算）' : ''}${nd.die && nd.check ? ' <span style="color:var(--accent)">⚠ 請確認</span>' : ''}${nd.die && !nd.n ? '（不知道一張做幾個，張數請自己算）' : nd.qty ? `，共要 ${nd.need} 張${nd.per > 1 ? `（${nd.qty}×${nd.per}）` : ''}` : '（數量填了才算張數）'}${nd.split ? `<br><small style="font-weight:400;color:var(--warning)">用紙欄寫 ${esc($(SLOT[slot].mat).value)}，長＋寬超過 ${JOIN}，照二片接算</small>` : ''}</div>`;
     if (nd.die) {
       const it = curItem(), d = dieOf(it), first = printOf(it, 'outer').v === '是' && d.timing === '先印';
+      if (nd.die && nd.noN) h += `<div class="tip">⚠ ${nd.n ? '用紙沒寫一張做幾個，先當 1 個用 1 張算（在用紙後面加 ÷2 這樣寫）' : '不知道一張做幾個，請在用紙欄填好（例：170×161 ÷2）'}</div>`;
+      if (nd.supplier && nd.supplier !== '華豐') {   // 特定廠商的紙（例：海宏社卡紙），不套華豐的算法、也不找瓦楞紙庫存
+        const short = nd.minQty && nd.qty && nd.qty < nd.minQty;
+        el.innerHTML = h + `<div class="stk-buy">${dieName()}・跟 <b>${esc(nd.supplier)}</b> 訂紙 ${nd.A}×${nd.B}${nd.need ? `，${nd.need} 張` : ''}${nd.minQty ? `<br><small>一次最低 ${nd.minQty} 個${nd.n ? `（${Math.ceil(nd.minQty / nd.n)} 張）` : ''}</small>` : ''}</div>` +
+          (short ? `<div class="tip">⚠ 這張單只有 ${nd.qty} 個，不到最低 ${nd.minQty} 個，下訂前先決定要不要多訂</div>` : ''); return;
+      }
+      if (!nd.n) { el.innerHTML = h; return; }
       if (d.source === '訂紙') {
         el.innerHTML = h + `<div class="stk-buy">${dieName()}・訂紙${nd.qty ? ` ${nd.need} 張` : ''} → ${first ? '紙先進廠印刷，印好送加工廠' : '紙直接送加工廠'}<br><small>紙廠來不及：上面「備紙」改按「庫存紙裁切」</small></div>` + paperOrderHTML(nd, nd.need); return;
       }
@@ -1156,7 +1277,7 @@ async function saveNewProduct(slot, btn) {
   const size = $(SLOT[slot].size).value.trim();
   if (!name) { alert('請填品名'); return; }
   const kind = $('np_kind_' + slot).value, layer = +$('np_layer_' + slot).value;
-  const mat = $(SLOT[slot].mat).value.trim().replace(/\s*×\s*\d+張$/, '') || calcMat(size, kind, layer);
+  const mat = $(SLOT[slot].mat).value.trim().replace(/\s*×\s*\d+張$/, '') || (/^(斬式|套板)$/.test(kind) ? '' : calcMat(size, kind, layer));
   // 隔板沒有長寬高，用用紙當尺寸
   const pSize = sizeKey(size) ? sizeKey(size).split('x').join('×') : (kind === '隔板' && matKey(mat).includes('x') ? matKey(mat).split('x').join('×') : '');
   if (!pSize) { alert(kind === '隔板' ? '請先填隔板用紙（例如 45×168）' : `請先填${slotName(slot)}尺寸（長×寬×高）`); return; }
@@ -1244,7 +1365,9 @@ function pickDie(n) { setDieName(n); setBoxType('die', true); renderPM(); }
 function dieOf(it) {
   const o = it ? {name: it._dieName, layer: it._dieLayer, back: it._dieBack, timing: it._dieTiming, source: it._dieSource} : editDie;
   const P = it ? it._pm : pm, prod = P && P.outer && P.outer.prod;
-  return {name: o.name || '斬盒', layer: String(o.layer || (prod && prod.層數) || '3'), back: o.back !== false,
+  const names = [prod && prod.品名, it ? it.product : $('f_product').value, it && it._ai].filter(Boolean);
+  const row = currentCustomer ? findDieRow(currentCustomer.name, names, o.name || '斬盒') : null;
+  return {name: o.name || '斬盒', layer: String(o.layer || dieRowLayer(row) || (prod && prod.層數) || '3'), back: o.back !== false,
     timing: o.timing || (prod && prod.印刷時機) || '', source: o.source || '訂紙'};
 }
 function renderDie() {
@@ -1256,8 +1379,16 @@ function renderDie() {
     row('備紙', 'source', [['訂紙','訂紙'], ['庫存裁切','庫存紙裁切']]) +
     (printed ? row('什麼時候印', 'timing', [['先印','先印再加工'], ['後印','加工回來再印']]) +
       (d.timing ? '' : '<div class="die-row" style="color:var(--accent);font-weight:700">⚠ 請選先印或後印，沒選不能排程</div>') : '') +
-    row('加工回廠後', 'back', [[true,'回來裝釘'], [false,'🚚 直接出貨']]);
+    row('加工回廠後', 'back', [[true,'回來裝釘'], [false,'🚚 直接出貨']]) +
+    (boxType === 'die' ? diePaperHTML() : '');
+  const f = $('f_outer_material');
+  if (boxType === 'die') {
+    if (f.value && !dieRaw(it, f.value)) { f.value = ''; if (it) { it.outer_material = ''; delete it._sys.outer_material; } }
+    const e = dieNow(); f.placeholder = !e.manual && e.text ? '系統帶：' + e.text : (f.dataset.ph || '');
+  } else f.placeholder = f.dataset.ph || '';
 }
+$('f_outer_material').dataset.ph = $('f_outer_material').placeholder;
+['f_outer_size', 'f_outer_material', 'f_outer_qty'].forEach(id => $(id).addEventListener('input', () => { if (boxType === 'die') renderDie(); }));
 const DIE_KEY = {layer:'_dieLayer', back:'_dieBack', timing:'_dieTiming', source:'_dieSource'};
 function setDie(k, v) {
   const it = curItem();
@@ -1350,7 +1481,7 @@ async function ensureProducts(d) {
     if (!sizeKey(size)) continue;
     const kind = slot === 'outer' && d._type === 'die' ? (dieOf(it).name === '套板' ? '套板' : '斬式') : defKind(slot, d._type), layer = defLayer(slot, d._type);
     const name = d._type === 'both' ? d.product + (slot === 'outer' ? ' 外箱' : ' 內盒') : d.product;
-    const mat = String((slot === 'outer' ? d.outer_material : d.inner_material) || '').replace(/\s*×\s*\d+張$/, '') || calcMat(size, kind, layer);
+    const mat = String((slot === 'outer' ? d.outer_material : d.inner_material) || '').replace(/\s*×\s*\d+張$/, '') || (/^(斬式|套板)$/.test(kind) ? '' : calcMat(size, kind, layer));   // 斬盒用紙看「斬盒用紙表」，不寫進產品資料
     const r = await gasPost({action:'saveProduct', product:{'客戶ID':cust.id, '客戶名稱':cust.name, '品名':name, '其他寫法':'', '箱型':kind,
       '尺寸':sizeKey(size).split('x').join('×'), '用紙':mat, '層數':String(layer), '紙色':/W$/i.test(name) ? '白' : '', '印刷':'有印', '備註':'接單附照片時新增'}});
     if (!r.success) throw new Error('建立產品失敗：' + r.error);
@@ -2129,13 +2260,16 @@ function getFormData(){
   };
 }
 
+// 一筆資料（畫面或全部一起存）的斬盒用紙
+const dieEffOf = d => dieEff({it:d._item||null, P:d._pm||pm, cust:d.customer, product:d.product, size:d.outer_size, raw:d.outer_material});
+
 // ── Save Order ──
 // 一筆品項 → 要寫進試算表的列（外箱、內盒都有就拆兩列）
 function buildRows(d, id){
   if (isOut(d._type)) Object.assign(d,{inner_size:'',inner_qty:'',inner_material:'',inner_mark:''});
   if (isIn(d._type)) Object.assign(d,{outer_size:'',outer_qty:'',outer_material:'',front_mark:'',side_mark:''});
   const die=dieOf(d._item||null);
-  const outerM=d.outer_material||(d._type==='die' ? calcMat(d.outer_size, kindOf('outer',d._pm,'die'), +die.layer) : calcMaterial(d.outer_size,'outer',d._pm,d._type));
+  const outerM=d._type==='die' ? dieEffOf(d).text : d.outer_material||calcMaterial(d.outer_size,'outer',d._pm,d._type);
   const innerM=d.inner_material||calcMaterial(d.inner_size,'inner',d._pm,d._type);
   // 試算表 T 欄成型方式：斬盒、套板（直接出貨）或 斬盒釘箱、套板釘箱（回來裝釘）、隔板寫「平板紙板」
   const wasDie = !!editingOrderId && /^(斬盒|套板)(釘箱)?$/.test(editOrigForm);
@@ -2406,9 +2540,9 @@ $('printBtn').addEventListener('click',()=>{
       <div class="po-cell"><div class="po-cell-label">品名 / 型號</div><div class="po-cell-value">${esc(d.product)||'－'}</div></div>
       ${isIn(boxType)?'':`
       <div class="po-cell"><div class="po-cell-label">${slotName('outer')}（長×寬×高）</div><div class="po-cell-value mono big">${esc(d.outer_size)||'－'}</div></div>
-      <div class="po-cell"><div class="po-cell-label">${slotName('outer')}用紙（台分）</div><div class="po-cell-value mono big red">${esc(d.outer_material||(boxType==='die'?calcMat(d.outer_size,kindOf('outer'),+dieOf(curItem()).layer):outerM))||'－'}</div></div>
+      <div class="po-cell"><div class="po-cell-label">${slotName('outer')}用紙（台分）</div><div class="po-cell-value mono big red">${esc(boxType==='die'?dieEffOf(d).text:outerM)||'－'}</div></div>
       <div class="po-cell"><div class="po-cell-label">${slotName('outer')}數量</div><div class="po-cell-value big red">${esc(d.outer_qty)||'－'}</div></div>`}
-      ${boxType==='die'?(()=>{ const x=dieOf(curItem()), pr=printOf(curItem(),'outer').v==='是'; return `<div class="po-cell span3"><div class="po-cell-label">${esc(x.name)}加工</div><div class="po-cell-value big">${x.layer==='5'?'五層':'三層'}・${x.source==='庫存裁切'?'庫存紙裁切':'訂紙'}・${!pr?'不印':x.timing==='先印'?'先印再加工':x.timing==='後印'?'加工回來再印':'⚠ 印刷順序未定'}・${x.back?'回廠裝釘':'加工好直接出貨'}</div></div>`; })():''}
+      ${boxType==='die'?(()=>{ const x=dieOf(curItem()), pr=printOf(curItem(),'outer').v==='是'; return `<div class="po-cell span3"><div class="po-cell-label">${esc(x.name)}加工</div><div class="po-cell-value big">${x.layer==='5'?'五層':'三層'}・${x.source==='庫存裁切'?'庫存紙裁切':'訂紙'}${(()=>{ const n=dieSheets(qtyNum(d.outer_qty), dieEffOf(d).per); return n?` ${n} 張`:''; })()}・${!pr?'不印':x.timing==='先印'?'先印再加工':x.timing==='後印'?'加工回來再印':'⚠ 印刷順序未定'}・${x.back?'回廠裝釘':'加工好直接出貨'}</div></div>`; })():''}
       ${isIn(boxType)?`
       <div class="po-cell"><div class="po-cell-label">${slotName('inner')}（長×寬×高）</div><div class="po-cell-value mono big">${esc(d.inner_size)||'－'}</div></div>
       <div class="po-cell"><div class="po-cell-label">${slotName('inner')}用紙（台分）</div><div class="po-cell-value mono big" style="color:#b7770d">${esc(innerM)}</div></div>
@@ -2440,7 +2574,7 @@ $('printBtn').addEventListener('click',()=>{
 $('exportBtn').addEventListener('click',()=>{
   const d=getFormData();
   const headers=['客戶','訂單號','訂貨日','交貨日','品名','外箱尺寸','外箱用料','外箱數','內箱尺寸','內箱用料','條碼','Item No.','正嘜','側嘜','備注'];
-  const vals=[d.customer||d.customerTyped,d.order_no,d.order_date,d.delivery_date,d.product,d.outer_size,d.outer_material||calcMaterial(d.outer_size,'outer'),d.outer_qty,d.inner_size,d.inner_material||calcMaterial(d.inner_size,'inner'),d.barcode,d.item_no,d.front_mark,d.side_mark,d.notes];
+  const vals=[d.customer||d.customerTyped,d.order_no,d.order_date,d.delivery_date,d.product,d.outer_size,boxType==='die'?dieEffOf(d).text:d.outer_material||calcMaterial(d.outer_size,'outer'),d.outer_qty,d.inner_size,d.inner_material||calcMaterial(d.inner_size,'inner'),d.barcode,d.item_no,d.front_mark,d.side_mark,d.notes];
   const csv=[headers.join(','),vals.map(v=>`"${(v||'').replace(/"/g,'""')}"`).join(',')].join('\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
   a.download=`訂單_${d.order_no||'draft'}_${new Date().toLocaleDateString('zh-TW').replace(/\//g,'-')}.csv`; a.click();
@@ -2470,6 +2604,7 @@ function hideStatus(){statusBar.style.display='none';}
 // ── Init ──
 loadCustomers();
 loadStock();
+loadDiePaper();
 loadPaperPrice();
 loadRecent();
 
