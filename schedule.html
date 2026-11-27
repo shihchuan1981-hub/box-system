@@ -312,7 +312,7 @@ function pickDate(btn, nos){
 function dieCtl(o){
   const lock = [0,1,5].some(k => o.prog[k]) ? 'disabled' : '', no = esc(o.no);
   const sel = (key, val, opts) => `<select aria-label="${key==='timing'?'印刷順序':'備紙方式'}" ${lock && !(key==='timing' && o.needTiming) ? 'disabled' : ''} onchange="dieOption('${no}','${key}',this.value)">${opts.map(([v,t]) => `<option value="${v}" ${v===val?'selected':''}>${t}</option>`).join('')}</select>`;
-  return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${sel('source', o.source, [['訂紙','訂紙'],['庫存裁切','庫存紙裁切']])}${o.print ? sel('timing', o.timing, (o.timing?[]:[['','⚠ 先印或後印？']]).concat([['先印','先印再加工'],['後印','加工回來再印']])) : ''}</div>`;
+  return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${sel('source', o.source, [['訂紙','訂紙'],['庫存裁切','庫存紙裁切']])}${o.print ? sel('timing', o.timing, (o.timing?[]:[['','⚠ 先印或後印？']]).concat(o.source==='庫存裁切'?[]:[['紙廠印','紙廠印好直送加工']],[['先印','先印再加工'],['後印','加工回來再印']])) : ''}</div>`;
 }
 async function dieOption(no, key, value){
   if(!value) return;

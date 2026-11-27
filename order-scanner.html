@@ -1046,18 +1046,32 @@ function dieNameHit(name, code) {
   const n = String(name || '').trim().toUpperCase(), c = String(code || '').trim().toUpperCase();
   return !!c && n.startsWith(c) && !/^[0-9A-Z.\-]/.test(n.slice(c.length));
 }
+// 本子的品名本身就是尺寸（例如 30×20×8cm、66×13台分）→ 比數字，x、X、× 和有沒有寫 cm 都算同一個
+const SIZE_NAME = /^(\d+(?:\.\d+)?(?:×\d+(?:\.\d+)?){1,2})(?:CM|公分|台分)?$/;
+const dieText = s => String(s || '').normalize('NFKC').toUpperCase().replace(/\s+/g, '').replace(/(\d)(?:CM|公分)?[X×*](?=\d)/g, '$1×');
+function dieSizeHit(text, code) {
+  const m = dieText(code).match(SIZE_NAME); if (!m) return false;
+  const want = m[1].split('×').map(Number);
+  return (dieText(text).match(/\d+(?:\.\d+)?(?:×\d+(?:\.\d+)?)+/g) || []).some(g => {
+    const got = g.split('×').map(Number);
+    return got.length >= want.length && (want.length === 3 || got.length === 2) && want.every((v, i) => v === got[i]);
+  });
+}
+const NO_GUESS_CUST = /豐錥/;   // 推算公式只用可洲的本子驗算過；豐錥常寫 cm，推算會算錯
+const bookSays = (row, word) => !!row && String(row.備註 || '').includes(word);
 function findDieRow(cust, names, type) {
   const c = String(cust || '').replace(/\s+/g, ''); if (!c) return null;
   const rows = diePaper.filter(r => { const rc = String(r.客戶 || '').replace(/\s+/g, ''); return rc && (c.includes(rc) || rc.includes(c)) && r.類型 === type; });
   for (const nm of names) {
-    const hit = rows.filter(r => dieNameHit(nm, r.品名)).sort((a, b) => b.品名.length - a.品名.length)[0];
+    if (!nm) continue;
+    const hit = rows.filter(r => SIZE_NAME.test(dieText(r.品名)) ? dieSizeHit(nm, r.品名) : dieNameHit(String(nm).normalize('NFKC').replace(/#\s+/g, '#').replace(/^(斬盒|套板)\s*/, ''), r.品名)).sort((a, b) => b.品名.length - a.品名.length)[0];
     if (hit) return hit;
   }
   return null;
 }
 // 系統該帶的用紙。src：book 本子已確認｜pending 本子待確認｜guess 公式推算｜none 沒辦法算
 function dieAuto({cust, names, size, type}) {
-  const row = findDieRow(cust, names, type), notes = [], sz = parseSize(size);
+  const row = findDieRow(cust, [...names, size], type), notes = [], sz = parseSize(size);
   const sizeDiff = !!(row && sizeKey(row.商品尺寸) && sizeKey(size) && sizeKey(row.商品尺寸) !== sizeKey(size));
   if (diePaperState === 'error') notes.push('用紙表沒讀到，請重新整理網頁再確認一次');
   if (sizeDiff) notes.push(`本子上 ${row.品名} 的尺寸是 ${row.商品尺寸}，這張單是 ${size}，尺寸不一樣，所以不套本子的用紙`);
@@ -1068,9 +1082,13 @@ function dieAuto({cust, names, size, type}) {
     const kinds = [...new Set(all.map(r => `${r.用紙}${r.一張幾個 ? ' ÷' + r.一張幾個 : ''}${r.材質 ? '（' + r.材質 + '）' : ''}`))];
     if (kinds.length > 1) notes.unshift(`⚠ 本子上 ${row.品名} 有 ${kinds.length} 種紙：${kinds.join('、')}。下面只帶第 1 種，如果是兩片都要做，其他的要另外訂`);
     const ps = paperSize(row.用紙), per = parseInt(row.一張幾個, 10) || null;
-    if (!ps) return {src:'none', text:'', per:null, row, notes};
+    if (!ps) { notes.push('本子上這一款的用紙還空著，請手動填'); return {src:'none', text:'', per:null, row, notes}; }
     const src = row.狀態 === '推算' ? 'guess' : row.狀態 === '已確認' ? 'book' : 'pending';
     return {src, per, row, notes, text:`${ps.A}×${ps.B}${per ? ' ÷' + per : ''}${src === 'guess' ? GUESS_TAG : src === 'pending' ? PEND_TAG : ''}`};
+  }
+  if (type === '斬盒' && (NO_GUESS_CUST.test(cust || '') || /cm|公分/i.test(size || ''))) {
+    notes.push('本子上沒有對到這一款。這張單不做推算（cm 尺寸或豐錥），請手動填用紙');
+    return {src:'none', text:'', per:null, row:null, notes};
   }
   if (type === '斬盒' && sz) {   // 只適用一張做 2 個的一般斬盒
     const A = Math.ceil((sz.w + sz.h) * 2 + 32), B = Math.ceil((sz.l + sz.w) * 2 + 12);
@@ -1346,7 +1364,9 @@ function printGuess(it, slot) {
 }
 function printOf(it, slot) {
   const chosen = it ? it['print_' + slot] : editPrint[slot];
-  return chosen ? {v:chosen, why:'已選'} : printGuess(it, slot);
+  if (chosen) return {v:chosen, why:'已選'};
+  if (slot === 'outer' && ((it && it._type) || boxType) === 'die' && bookSays(dieRowOf(it), '紙廠印刷')) return {v:'是', why:'本子寫紙廠印刷'};
+  return printGuess(it, slot);
 }
 function renderPrint() {
   const it = curItem();
@@ -1367,10 +1387,16 @@ function pickDie(n) { setDieName(n); setBoxType('die', true); renderPM(); }
 function dieOf(it) {
   const o = it ? {name: it._dieName, layer: it._dieLayer, back: it._dieBack, timing: it._dieTiming, source: it._dieSource} : editDie;
   const P = it ? it._pm : pm, prod = P && P.outer && P.outer.prod;
-  const names = [prod && prod.品名, it ? it.product : $('f_product').value, it && it._ai].filter(Boolean);
-  const row = currentCustomer ? findDieRow(currentCustomer.name, names, o.name || '斬盒') : null;
-  return {name: o.name || '斬盒', layer: String(o.layer || dieRowLayer(row) || (prod && prod.層數) || '3'), back: o.back !== false,
-    timing: o.timing || (prod && prod.印刷時機) || '', source: o.source || '訂紙'};
+  const row = dieRowOf(it);
+  const source = o.source || (bookSays(row, '用庫存紙裁') ? '庫存裁切' : '訂紙');
+  let timing = o.timing || (bookSays(row, '紙廠印刷') ? '紙廠印' : '') || (prod && prod.印刷時機) || '';
+  if (timing === '紙廠印' && source === '庫存裁切') timing = '';   // 用庫存紙就不能請紙廠印
+  return {name: o.name || '斬盒', layer: String(o.layer || dieRowLayer(row) || (prod && prod.層數) || '3'), back: o.back !== false, timing, source};
+}
+function dieRowOf(it) {
+  const P = it ? it._pm : pm, prod = P && P.outer && P.outer.prod;
+  const names = [prod && prod.品名, it ? it.product : $('f_product').value, it && it._ai, it ? it.outer_size : $('f_outer_size').value];
+  return currentCustomer ? findDieRow(currentCustomer.name, names, (it ? it._dieName : editDie.name) || '斬盒') : null;
 }
 function renderDie() {
   const el = $('dieOpts'); if (!el) return;
@@ -1379,7 +1405,7 @@ function renderDie() {
     `<button type="button" class="${d[key] === v ? 'on' : ''}" onclick="setDie('${key}',${typeof v === 'string' ? `'${v}'` : v})">${text}</button>`).join('')}</span></div>`;
   el.innerHTML = row('層數', 'layer', [['3','三層'], ['5','五層']]) +
     row('備紙', 'source', [['訂紙','訂紙'], ['庫存裁切','庫存紙裁切']]) +
-    (printed ? row('什麼時候印', 'timing', [['先印','先印再加工'], ['後印','加工回來再印']]) +
+    (printed ? row('什麼時候印', 'timing', [['紙廠印','紙廠印好直送加工'], ['先印','先印再加工'], ['後印','加工回來再印']]) +
       (d.timing ? '' : '<div class="die-row" style="color:var(--accent);font-weight:700">⚠ 請選先印或後印，沒選不能排程</div>') : '') +
     row('加工回廠後', 'back', [[true,'回來裝釘'], [false,'🚚 直接出貨']]) +
     (boxType === 'die' ? diePaperHTML() : '');
@@ -2544,7 +2570,7 @@ $('printBtn').addEventListener('click',()=>{
       <div class="po-cell"><div class="po-cell-label">${slotName('outer')}（長×寬×高）</div><div class="po-cell-value mono big">${esc(d.outer_size)||'－'}</div></div>
       <div class="po-cell"><div class="po-cell-label">${slotName('outer')}用紙（台分）</div><div class="po-cell-value mono big red">${esc(boxType==='die'?dieEffOf(d).text:outerM)||'－'}</div></div>
       <div class="po-cell"><div class="po-cell-label">${slotName('outer')}數量</div><div class="po-cell-value big red">${esc(d.outer_qty)||'－'}</div></div>`}
-      ${boxType==='die'?(()=>{ const x=dieOf(curItem()), pr=printOf(curItem(),'outer').v==='是'; return `<div class="po-cell span3"><div class="po-cell-label">${esc(x.name)}加工</div><div class="po-cell-value big">${x.layer==='5'?'五層':'三層'}・${x.source==='庫存裁切'?'庫存紙裁切':'訂紙'}${(()=>{ const n=dieSheets(qtyNum(d.outer_qty), dieEffOf(d).per); return n?` ${n} 張`:''; })()}・${!pr?'不印':x.timing==='先印'?'先印再加工':x.timing==='後印'?'加工回來再印':'⚠ 印刷順序未定'}・${x.back?'回廠裝釘':'加工好直接出貨'}</div></div>`; })():''}
+      ${boxType==='die'?(()=>{ const x=dieOf(curItem()), pr=printOf(curItem(),'outer').v==='是'; return `<div class="po-cell span3"><div class="po-cell-label">${esc(x.name)}加工</div><div class="po-cell-value big">${x.layer==='5'?'五層':'三層'}・${x.source==='庫存裁切'?'庫存紙裁切':'訂紙'}${(()=>{ const n=dieSheets(qtyNum(d.outer_qty), dieEffOf(d).per); return n?` ${n} 張`:''; })()}・${!pr?'不印':x.timing==='紙廠印'?'紙廠印刷，直送加工廠':x.timing==='先印'?'先印再加工':x.timing==='後印'?'加工回來再印':'⚠ 印刷順序未定'}・${x.back?'回廠裝釘':'加工好直接出貨'}</div></div>`; })():''}
       ${isIn(boxType)?`
       <div class="po-cell"><div class="po-cell-label">${slotName('inner')}（長×寬×高）</div><div class="po-cell-value mono big">${esc(d.inner_size)||'－'}</div></div>
       <div class="po-cell"><div class="po-cell-label">${slotName('inner')}用紙（台分）</div><div class="po-cell-value mono big" style="color:#b7770d">${esc(innerM)}</div></div>

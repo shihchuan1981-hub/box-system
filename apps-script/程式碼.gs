@@ -375,7 +375,7 @@ function setProductPrint(id, v) {
 
 // 斬盒／套板的印刷順序記在產品資料（沒有「印刷時機」欄就加在最後面）
 function setProductPrintTime(id, v) {
-  if (['先印', '後印'].indexOf(v) < 0) throw new Error('印刷時機只能是 先印 或 後印');
+  if (['紙廠印', '先印', '後印'].indexOf(v) < 0) throw new Error('印刷時機只能是 紙廠印、先印 或 後印');
   const sh = prodSheet();
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -893,11 +893,12 @@ function buildOrder(r, b, sched) {
     if (kind === '釘箱') route.push(3);
     route.push(4);
     // 斬盒／套板（外加工）：庫存裁切才經裁切站；有印分先印、後印；名稱後面有「釘箱」＝回廠裝釘
-    const timing = String(b[COL_TIMING] || '').trim();
     const source = die ? String(b[COL_SOURCE] || '').trim() || '訂紙' : '';
+    let timing = String(b[COL_TIMING] || '').trim();
+    if (timing === '紙廠印' && source === '庫存裁切') timing = '';   // 改用庫存紙後要重選印刷順序
     if (die) {
       route = source === '庫存裁切' ? [0] : [];
-      if (!print) route.push(5);
+      if (!print || timing === '紙廠印') route.push(5);   // 紙廠印好直接送加工廠，本廠不排印刷
       else if (timing === '後印') route.push(5, 1);
       else route.push(1, 5);                      // 還沒選的先當先印，看板會提醒要選
       if (die[2]) route.push(3);
@@ -1052,7 +1053,7 @@ function updateStation(orderId, station, state) {
 
 // 看板上改斬盒／套板的印刷順序、備紙方式（例如紙廠來不及，改用庫存紙裁切）
 function setDieOption(orderId, timing, source) {
-  if (timing && ['先印', '後印'].indexOf(timing) < 0) throw new Error('印刷時機只能是 先印 或 後印');
+  if (timing && ['紙廠印', '先印', '後印'].indexOf(timing) < 0) throw new Error('印刷時機只能是 紙廠印、先印 或 後印');
   if (source && ['訂紙', '庫存裁切'].indexOf(source) < 0) throw new Error('備紙只能是 訂紙 或 庫存裁切');
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -1068,7 +1069,9 @@ function setDieOption(orderId, timing, source) {
     if (source && source !== (String(b[COL_SOURCE] || '') || '訂紙')) {
       if (started(0) || started(1) || started(5)) throw new Error('這張單已經開工，不能改備紙方式');
       writeBoardCell(sh, i + 1, COL_SOURCE, source);
+      if (source === '庫存裁切' && String(b[COL_TIMING] || '') === '紙廠印') { writeBoardCell(sh, i + 1, COL_TIMING, ''); b[COL_TIMING] = ''; }
     }
+    if (timing === '紙廠印' && (source || String(b[COL_SOURCE] || '') || '訂紙') === '庫存裁切') throw new Error('用庫存紙裁切，不能選紙廠印');
     if (timing && timing !== String(b[COL_TIMING] || '')) {
       if (b[COL_TIMING] && (started(1) || started(5))) throw new Error('已經開始印刷或送加工，不能改印刷順序');
       writeBoardCell(sh, i + 1, COL_TIMING, timing);

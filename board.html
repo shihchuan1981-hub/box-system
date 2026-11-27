@@ -320,10 +320,10 @@ function dieHTML(o) {
   const no = esc(o.no), stock = o.source === '庫存裁切', after = o.print && o.timing === '後印';
   const text = cur === 0 ? `庫存紙裁成用料尺寸，裁好${o.route[1] === 1 ? '先送印刷' : '送加工廠'}`
     : cur === 1 ? (after ? '後印：加工回廠後印刷' : '先印：印完送加工廠')
-    : cur === 5 ? (stock ? '紙：庫存紙廠內裁切' : o.route[0] === 5 ? '紙：訂紙，紙廠直接送加工廠' : '紙：訂紙，先進廠印刷') + (after ? '・回廠後要印刷' : '') : '';
+    : cur === 5 ? (o.timing === '紙廠印' && o.print ? '紙：紙廠印刷好，直接送加工廠' : stock ? '紙：庫存紙廠內裁切' : o.route[0] === 5 ? '紙：訂紙，紙廠直接送加工廠' : '紙：訂紙，先進廠印刷') + (after ? '・回廠後要印刷' : '') : '';
   let h = text ? `<div class="note"><b>${text}</b></div>` : '';
   if (o.needTiming) h += `<div class="mkwarn">⚠ 還沒選什麼時候印（目前暫排先印）
-    <div class="acts"><button onclick="dieOption('${no}',{timing:'先印'})">先印再加工</button><button onclick="dieOption('${no}',{timing:'後印'})">加工回來再印</button></div></div>`;
+    <div class="acts">${stock ? '' : `<button onclick="dieOption('${no}',{timing:'紙廠印'})">紙廠印好直送加工</button>`}<button onclick="dieOption('${no}',{timing:'先印'})">先印再加工</button><button onclick="dieOption('${no}',{timing:'後印'})">加工回來再印</button></div></div>`;
   const untouched = [0,1,5].every(k => !o.prog[k]);
   if (untouched && cur === o.route[0]) h += `<div class="acts"><button class="undo" onclick="dieOption('${no}',{source:'${stock ? '訂紙' : '庫存裁切'}'})">${stock ? '改回訂紙' : '紙廠來不及 → 改用庫存紙裁切'}</button></div>`;
   return h;
