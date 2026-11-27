@@ -1057,13 +1057,21 @@ function dieSizeHit(text, code) {
     return got.length >= want.length && (want.length === 3 || got.length === 2) && want.every((v, i) => v === got[i]);
   });
 }
-const NO_GUESS_CUST = /豐錥/;   // 推算公式只用可洲的本子驗算過；豐錥常寫 cm，推算會算錯
+const NO_GUESS_CUST = /豐錥|昆鑫/;   // 推算公式只用可洲的本子驗算過；豐錥常寫 cm、昆鑫多半一張做 1 個，推算會算錯
+// 昆鑫的型號夾在長品名中間（B3001107 彩盒 P44498 OLYMPIA #56 …）→ 抓出 #56 去對本子；先認 OLYMPIA 後面的那個
+const HASH_CUST = /昆鑫/;
+function hashModel(name) {
+  const t = String(name || '').normalize('NFKC'), m = t.match(/OLYMPIA\s*#\s*(\d+)/i) || t.match(/#\s*(\d+)/);
+  return m ? '#' + m[1] : '';
+}
 const bookSays = (row, word) => !!row && String(row.備註 || '').includes(word);
 function findDieRow(cust, names, type) {
   const c = String(cust || '').replace(/\s+/g, ''); if (!c) return null;
   const rows = diePaper.filter(r => { const rc = String(r.客戶 || '').replace(/\s+/g, ''); return rc && (c.includes(rc) || rc.includes(c)) && r.類型 === type; });
   for (const nm of names) {
     if (!nm) continue;
+    const code = HASH_CUST.test(c) ? hashModel(nm) : '';
+    if (code) { const h = rows.find(r => String(r.品名).trim() === code); if (h) return h; continue; }
     const hit = rows.filter(r => SIZE_NAME.test(dieText(r.品名)) ? dieSizeHit(nm, r.品名) : dieNameHit(String(nm).normalize('NFKC').replace(/#\s+/g, '#').replace(/^(斬盒|套板)\s*/, ''), r.品名)).sort((a, b) => b.品名.length - a.品名.length)[0];
     if (hit) return hit;
   }
@@ -1087,7 +1095,7 @@ function dieAuto({cust, names, size, type}) {
     return {src, per, row, notes, text:`${ps.A}×${ps.B}${per ? ' ÷' + per : ''}${src === 'guess' ? GUESS_TAG : src === 'pending' ? PEND_TAG : ''}`};
   }
   if (type === '斬盒' && (NO_GUESS_CUST.test(cust || '') || /cm|公分/i.test(size || ''))) {
-    notes.push('本子上沒有對到這一款。這張單不做推算（cm 尺寸或豐錥），請手動填用紙');
+    notes.push('本子上沒有對到這一款。這張單不做推算（cm 尺寸、豐錥或昆鑫），請手動填用紙');
     return {src:'none', text:'', per:null, row:null, notes};
   }
   if (type === '斬盒' && sz) {   // 只適用一張做 2 個的一般斬盒
@@ -2189,6 +2197,7 @@ let boxType='outer';
 function dieHint(d){
   const text=[d.die_type, d.product].join(' ');
   if (/套板/.test(text)) return '套板';
+  if (/昆鑫/.test(d.customer||'') && /彩盒/.test(d.product||'')) return '斬盒';   // 昆鑫的彩盒就是斬盒
   return /斬型|斬盒/.test(text+' '+(d.notes||'')) ? '斬盒' : '';
 }
 function applyDieHint(d){
